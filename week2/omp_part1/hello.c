@@ -10,10 +10,11 @@ int main (int argc, char **argv)
 		sleep(1);
 		printf ("world!\n");
 	}
+
 	#pragma omp parallel
-	printf ("Have a nice day!\n");
-	printf ("Have fun!\n");
-	
+	printf("Have a nice day!\n");
+	printf("Have fun!\n");
+
 	printf("\n");
 	system("echo $USER");
 	system("date");
