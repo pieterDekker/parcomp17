@@ -6,6 +6,7 @@ int main (int argc, char **argv)
 	int i, x;
 	int histogram[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	for (i = 0; i < N; i++)
+
 	{
 		x = 1;
 		#pragma omp parallel sections shared(x)

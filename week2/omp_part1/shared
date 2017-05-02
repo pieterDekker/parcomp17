@@ -1,0 +1,52 @@
+Script started on zo 30 apr 2017 21:37:37 CEST
+export OMP_NUM_THREADS=1
+./clock
+
+sum=4999999950000000
+wallclock: 0.319521 seconds
+*************************************
+sum=4999999950000000
+wallclock: 1.456893 seconds
+
+franktn
+zo 30 apr 2017 21:38:06 CEST
+
+export OMP_NUM_THREADS=2
+./clock
+
+sum=4999999950000000
+wallclock: 0.154351 seconds
+*************************************
+sum=4999999950000000
+wallclock: 3.892905 seconds
+
+franktn
+zo 30 apr 2017 21:38:20 CEST
+
+export OMP_NUM_THREADS=4
+./clock
+
+sum=4999999950000000
+wallclock: 0.081125 seconds
+*************************************
+sum=4999999950000000
+wallclock: 9.132296 seconds
+
+franktn
+zo 30 apr 2017 21:38:35 CEST
+
+export OMP_NUM_THREADS=8
+./clock
+
+sum=4999999950000000
+wallclock: 0.073859 seconds
+*************************************
+sum=4999999950000000
+wallclock: 11.650627 seconds
+
+franktn
+zo 30 apr 2017 21:38:55 CEST
+
+exit
+
+Script done on zo 30 apr 2017 21:39:08 CEST
