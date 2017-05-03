@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <omp.h>
 #define N 1000000
 int main (int argc, char **argv)
 {
+	omp_set_num_threads(2);
 	int i, x;
 	int histogram[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	for (i = 0; i < N; i++)

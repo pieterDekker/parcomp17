@@ -2,7 +2,7 @@
 #include <stdlib.h>
 int main (int argc, char **argv)
 {
-    omp_set_nested(1);
+    omp_set_nested(0);
     omp_set_num_threads(2);
 	#pragma omp parallel
 	{

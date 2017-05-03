@@ -5,22 +5,25 @@
 int main (int argc, char **argv)
 {
 	int i=31415;
+
 	printf ("#i=%d\n", i);
 	#pragma omp parallel private(i)
 	{
-		printf (" i=%d\n", i);
+		printf (" i=%d\n", i);//all 0
 		i = 99;
 	}
+
 	printf ("#i=%d\n", i);
 	#pragma omp parallel firstprivate(i)
 	{
-		printf (" i=%d\n", i);
+		printf (" i=%d\n", i);//all 31415
 		i = 99;
 	}
+
 	printf ("#i=%d\n", i);
 	#pragma omp parallel shared(i)
 	{
-		printf (" i=%d\n", i++);
+		printf (" i=%d\n", i++);//31415-31418
 	}
 	printf ("#i=%d\n", i);
 	
