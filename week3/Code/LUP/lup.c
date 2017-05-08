@@ -52,6 +52,7 @@ real **allocMatrix(size_t height, size_t width) {
 
     matrix = safeMalloc(height * sizeof(real *));
     matrix[0] = safeMalloc(width * height * sizeof(real));
+
     for (row = 1; row < height; ++row)
         matrix[row] = matrix[row - 1] + width;
     return matrix;
@@ -66,17 +67,15 @@ real *allocVector(size_t length) {
     return safeMalloc(length * sizeof(real));
 }
 
-
 void freeVector(real *vec) {
     free(vec);
 }
-
 
 void showMatrix(size_t n, real **A) {
     size_t i, j;
     for (i = 0; i < n; ++i) {
         for (j = 0; j < n; ++j) {
-            printf("%f ", A[i][j]);
+            printf("%.2f ", A[i][j]);
         }
         printf("\n");
     }
@@ -189,31 +188,48 @@ int main(int argc, char **argv) {
     real **A, *x, *b;
 
     omp_set_nested(TRUE);
+    int dim;
+    do {
+        printf("enter the size:  ");
+        scanf("%d", &dim);
+    } while (dim < 1 && printf("size must be greater than or equal to 1"));
 
-    A = allocMatrix(3, 3);
-    x = allocVector(3);
-    b = allocVector(3);
+    A = allocMatrix(dim, dim);
+    x = allocVector(dim);
+    b = allocVector(dim);
 
-    A[0][0] = 0;
-    A[0][1] = 2;
-    A[0][2] = 3;
-    A[1][0] = 3;
-    A[1][1] = 0;
-    A[1][2] = 1;
-    A[2][0] = 6;
-    A[2][1] = 2;
-    A[2][2] = 8;
+#pragma omp for
+    for (int i = 0; i < dim; i++) {
+        b[i] = 1;
+        for (int j = 0; j < dim; j++) {
+            if (i == j) {
+                A[i][j] = -2;
+            } else if (ABS(i - j) == 1) {
+                A[i][j] = 1;
+            }
+        }
+    }
 
-    b[0] = 5;
-    b[1] = 4;
-    b[2] = 16;
+//    A[0][0] = 0;
+//    A[0][1] = 2;
+//    A[0][2] = 3;
+//    A[1][0] = 3;
+//    A[1][1] = 0;
+//    A[1][2] = 1;
+//    A[2][0] = 6;
+//    A[2][1] = 2;
+//    A[2][2] = 8;
+//
+//    b[0] = 5;
+//    b[1] = 4;
+//    b[2] = 16;
 
-    showMatrix(3, A);
+    showMatrix(dim, A);
     printf("\n");
 
-    solve(3, A, x, b);
+    solve(dim, A, x, b);
 
-    showVector(3, x);
+    showVector(dim, x);
 
     freeMatrix(A);
     freeVector(x);
