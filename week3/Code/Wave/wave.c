@@ -148,6 +148,7 @@ static void stretchContrast(void)
   
   min =  9999;
   max = -9999;
+#pragma omp parallel for collapse(3)
   for (frame=2; frame<NFRAMES; frame++)
   {
     for (i=0; i<N; i++)
@@ -169,6 +170,8 @@ static void stretchContrast(void)
   {
     scale = scale/(max-min);
   }
+
+#pragma omp parallel for collapse(3)
   for (frame=0; frame<NFRAMES; frame++)
   {
     for (i=0; i<N; i++)
