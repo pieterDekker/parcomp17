@@ -102,6 +102,8 @@ void decomposeLUP(size_t n, real **A, size_t *P) {
     int h, i, j, k, row;
     real pivot, absval, tmp;
 
+
+#pragma omp parallel for
     for (i = 0; i < n; ++i) {
         P[i] = i;
     }
@@ -109,11 +111,8 @@ void decomposeLUP(size_t n, real **A, size_t *P) {
     for (k = 0; k < n - 1; ++k) {
         row = -1;
         pivot = 0;
-
-//#pragma omp parallel for private(absval)
         for (i = k; i < n; ++i) {
             absval = (A[i][k] >= 0 ? A[i][k] : -A[i][k]);
-//            #pragma omp critical
             if (absval > pivot) {
                 pivot = absval;
                 row = i;
@@ -153,7 +152,7 @@ void LUPsolve(size_t n, real **LU, size_t *P, real *x, real *b) {
 
     /* Solve Ly=Pb using forward substitution */
     y = x;  /* warning, y is an alias for x! It is safe, though. */
-#pragma omp parallel for
+//#pragma omp parallel for
     for (i = 0; i < n; ++i) {
         y[i] = b[P[i]];
         for (j = 0; j < i; ++j) {
@@ -262,3 +261,4 @@ int main(int argc, char **argv) {
     system("date");
     return EXIT_SUCCESS;
 }
+
