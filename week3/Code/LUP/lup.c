@@ -100,12 +100,13 @@ void decomposeLUP(size_t n, real **A, size_t *P) {
         P[i] = i;
     }
 
-    #pragma omp parallel
+#pragma omp parallel
     {
         for (k = 0; k < n - 1; ++k) {
             row = -1;
             pivot = 0;
 
+#pragma omp for
             for (i = k; i < n; ++i) {
                 absval = (A[i][k] >= 0 ? A[i][k] : -A[i][k]);
                 if (absval > pivot) {
@@ -118,21 +119,19 @@ void decomposeLUP(size_t n, real **A, size_t *P) {
                 printf("Singular matrix\n");
                 exit(-1);
             }
-    #pragma omp barrier
-
             /* swap(P[k],P[row]) */
             h = P[k];
             P[k] = P[row];
             P[row] = h;
             /* swap rows */
-    #pragma omp parallel for
+#pragma omp for
             for (i = 0; i < n; ++i) {
                 tmp = A[k][i];
                 A[k][i] = A[row][i];
                 A[row][i] = tmp;
             }
 
-    #pragma omp parallel for
+#pragma omp for
             for (i = k + 1; i < n; ++i) {
                 A[i][k] /= A[k][k];
                 for (j = k + 1; j < n; ++j) {
@@ -142,7 +141,6 @@ void decomposeLUP(size_t n, real **A, size_t *P) {
         }
     }
 }
-
 void LUPsolve(size_t n, real **LU, size_t *P, real *x, real *b) {
     real *y;
     size_t i, j;
@@ -163,7 +161,7 @@ void LUPsolve(size_t n, real **LU, size_t *P, real *x, real *b) {
     {
         for (i = n-1; i > 0; --i) {
             x[i] = y[i];
-#pragma omp for
+//#pragma omp for
             for (j = i + 1; j < n; ++j) {
                 x[i] -= LU[i][j] * x[j];
             }
@@ -213,7 +211,7 @@ int main(int argc, char **argv) {
     }
 
  //   showMatrix(dim, A);
-    //   printf("\n");
+ //   printf("\n");
 
     solve(dim, A, x, b);
 
