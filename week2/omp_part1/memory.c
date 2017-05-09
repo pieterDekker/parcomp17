@@ -4,6 +4,8 @@
 #include <omp.h>
 int main (int argc, char **argv)
 {
+	printf("num threads: %d\n", omp_get_num_threads());
+	
 	int i=31415;
 
 	printf ("#i=%d\n", i);

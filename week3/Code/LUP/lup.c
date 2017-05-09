@@ -109,13 +109,31 @@ void decomposeLUP(size_t n, real **A, size_t *P) {
     for (k = 0; k < n - 1; ++k) {
         row = -1;
         pivot = 0;
+        typedef struct {
+            int pivot;
+            int row;
+        } Pair;
 
-#pragma omp parallel for
+        int nthreads = omp_get_max_threads();
+        Pair* maxs = allocVector(nthreads);
+        for (int i = 0; i < nthreads; ++i) {
+            maxs[i].a = 0;
+        }
+        #pragma omp parallel for
         for (i = k; i < n; ++i) {
+            int tid = omp_get_thread_num();
+
             absval = (A[i][k] >= 0 ? A[i][k] : -A[i][k]);
-            if (absval > pivot) {
-                pivot = absval;
-                row = i;
+            if (absval > maxs[tid].pivot) {
+                maxs[tid].pivot = absval;
+                maxs[tid].row = i;
+            }
+        }
+
+        for (int i = 0; i < nthreads; ++i) {
+            if (maxs[i].pivot > pivot) {
+                pivot = maxs[i].pivot;
+                row = maxs[i].row;
             }
         }
 
@@ -185,8 +203,14 @@ void solve(size_t n, real **A, real *x, real *b) {
 int main(int argc, char **argv) {
     real **A, *x, *b;
     int size;
+    int num_threads;
+    do {
+        printf("num threads: \n");
+        scanf("%d", &num_threads);
+    } while (num_threads < 1 && printf("err: num_threads < 1"));
+
     omp_set_num_threads(4);
-    printf("using %d thread(s)\n", omp_get_num_threads());
+    printf("using %d thread(s)\n", omp_get_max_threads());
     do {
         printf("size: \n");
         scanf("%d", &size);
