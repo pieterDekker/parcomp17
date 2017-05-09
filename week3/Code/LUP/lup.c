@@ -3,13 +3,23 @@
  * Version: 1.0 (01 March 2008)
  */
 
+//#pragma diagnostic ignored "-Wunused-result"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <omp.h>
 
 #define real float
 
 #define ABS(a) ((a)<0 ? (-(a)) : (a))
+
+static double timer(void)
+{
+    struct timeval tm;
+    gettimeofday (&tm, NULL);
+    return tm.tv_sec + tm.tv_usec/1000000.0;
+}
 
 /* forward references */
 static void *safeMalloc(size_t n);
@@ -72,7 +82,7 @@ void showMatrix(size_t n, real **A) {
     size_t i, j;
     for (i = 0; i < n; ++i) {
         for (j = 0; j < n; ++j) {
-            printf("%f ", A[i][j]);
+            printf("%.2f ", A[i][j]);
         }
         printf("\n");
     }
@@ -81,7 +91,7 @@ void showMatrix(size_t n, real **A) {
 void showVector(size_t n, real *vec) {
     size_t i;
     for (i = 0; i < n; ++i) {
-        printf("%f ", vec[i]);
+        printf("%.2f ", vec[i]);
     }
     printf("\n");
 }
@@ -99,6 +109,8 @@ void decomposeLUP(size_t n, real **A, size_t *P) {
     for (k = 0; k < n - 1; ++k) {
         row = -1;
         pivot = 0;
+
+#pragma omp parallel for
         for (i = k; i < n; ++i) {
             absval = (A[i][k] >= 0 ? A[i][k] : -A[i][k]);
             if (absval > pivot) {
@@ -173,6 +185,8 @@ void solve(size_t n, real **A, real *x, real *b) {
 int main(int argc, char **argv) {
     real **A, *x, *b;
     int size;
+    omp_set_num_threads(4);
+    printf("using %d thread(s)\n", omp_get_num_threads());
     do {
         printf("size: \n");
         scanf("%d", &size);
@@ -203,14 +217,31 @@ int main(int argc, char **argv) {
 //  b[1] = 4;
 //  b[2] = 16;
 
-
-
-    showMatrix(size, A);
-    printf("\n");
+//    showMatrix(size, A);
+//    printf("\n");
+    double clock = timer();
 
     solve(size, A, x, b);
 
-    showVector(size, x);
+    clock = timer() - clock;
+    printf("solved in: %fs\nresult:\n", clock);
+
+
+    if (size < 18) {//magic constant
+        showVector(size, x);
+    } else {
+        printf("result is larger than one line, print? (0 is no, 1 is yes)\n");
+        int response;
+        fflush(stdin);
+        do {
+            scanf("%d", &response);
+        } while (!(response == 0 || response == 1));
+
+        if (response != 0) {
+            showVector(size, x);
+        }
+    }
+
 
     freeMatrix(A);
     freeVector(x);
