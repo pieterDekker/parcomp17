@@ -105,6 +105,9 @@ void decomposeLUP(size_t n, real **A, size_t *P) {
 
 #pragma omp parallel for
     for (i = 0; i < n; ++i) {
+//        if(omp_get_thread_num()==0) {
+//            printf("%d --> #threads: %d\n", omp_get_thread_num(), omp_get_num_threads());
+//        }
         P[i] = i;
     }
 
