@@ -32,6 +32,10 @@
 *.dSYM/
 *.su
 
+# IDE-specific
 **/.idea/*
 *.out
 **/cmake-build-debug/
+
+# Weird imagefiles
+*.ppm

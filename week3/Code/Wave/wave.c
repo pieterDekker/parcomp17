@@ -52,6 +52,8 @@ static void initialize(real dx, real dt, real v, int n)
   nsrc = n;
   src = malloc(2*nsrc*sizeof(int));
   ampl = malloc(nsrc*sizeof(int));
+
+#pragma omp parallel for
   for (i=0; i<nsrc; i++)
   {
     src[2*i] = random()%N;
@@ -61,6 +63,8 @@ static void initialize(real dx, real dt, real v, int n)
 
   /* allocate memory for u */
   u = malloc(NFRAMES*sizeof(real **));
+
+#pragma omp parallel for
   for (k=0; k<NFRAMES; k++)
   {
     u[k] = malloc(N*sizeof(real *));
@@ -72,6 +76,7 @@ static void initialize(real dx, real dt, real v, int n)
   }
 
   /* initialize first two time steps */
+//#pragma omp parallel for collapse(2)
   for (i=0; i<N; i++)
   {
     for (j=0; j<N; j++)
@@ -79,6 +84,7 @@ static void initialize(real dx, real dt, real v, int n)
       u[0][i][j] = 0;
     }
   }
+//#pragma omp parallel for collapse(2)
   for (i=0; i<N; i++)
   {
     for (j=0; j<N; j++)
@@ -93,6 +99,7 @@ static void boundary(void)
   int i, j;
   real t = iter*timespacing;
 
+//#pragma omp parallel for private(j)
   for (i=0; i<N; i++)
   {
     for (j=0; j<N; j++)
@@ -100,6 +107,8 @@ static void boundary(void)
       u[iter][i][j] = 0;
     }
   }
+
+#pragma omp parallel for if(nsrc > 1000)
   for (i=0; i<nsrc; i++)
   {
     u[iter][src[2*i]][src[2*i+1]] = (real)(ampl[i]*sin(t));
@@ -113,9 +122,11 @@ static void solveWave(void)
   sqlambda = speed*timespacing/gridspacing;
   sqlambda = sqlambda*sqlambda;
 
+#pragma omp parallel for
   for (iter=2; iter<NFRAMES; iter++)
   {
     boundary();
+//        #pragma omp parallel for
     for (i=1; i<N-1; i++)
     {
       for (j=1; j<N-1; j++)
