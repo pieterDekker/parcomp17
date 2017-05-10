@@ -11,7 +11,9 @@
 #include <omp.h>
 
 #define real float
-
+#define INV 0
+#define SOLVE 1
+#define MODE INV
 #define ABS(a) ((a)<0 ? (-(a)) : (a))
 
 static double timer(void)
@@ -41,6 +43,8 @@ static void decomposeLUP(size_t n, real **A, size_t *P);
 static void LUPsolve(size_t n, real **LU, size_t *P, real *x, real *b);
 
 static void solve(size_t n, real **A, real *x, real *b);
+
+real **matrixInverse(size_t n, real **A);
 
 /********************/
 
@@ -185,68 +189,150 @@ void solve(size_t n, real **A, real *x, real *b) {
     free(P);
 }
 
-int main(int argc, char **argv) {
-    real **A, *x, *b;
-    int size;
-    int num_threads;
-    do {
-        printf("num threads: \n");
-        scanf("%d", &num_threads);
-    } while (num_threads < 1 && printf("err: num_threads < 1"));
+real **matrixInverse(size_t n, real **A) {
+    size_t *P, i, j;
+    real **INVAT, **Acopy, **eye;
+    INVAT = allocMatrix(n, n);//INVAT will hold the Transpose of the INVerse of A
+    eye = allocMatrix(n, n);
+    Acopy = allocMatrix(n, n);
+#pragma omp sections
+    {
 
-    omp_set_num_threads(num_threads);
-    printf("using %d thread(s)\n", omp_get_max_threads());
-    do {
-        printf("size: \n");
-        scanf("%d", &size);
-    } while (size < 1 && printf("err: size < 1"));
+#pragma omp section
+#pragma omp parallel for collapse(2)
+        for (i = 0; i < n; ++i) {
+            for (j = 0; j < n; ++j) {
+                Acopy[i][j] = A[i][j];
+            }
+        }
 
-    A = allocMatrix(size, size);
-    x = allocVector(size);
-    b = allocVector(size);
-
-    for (int i = 0; i < size; i++) {
-        b[i] = 1;
-        for (int j = 0; j < size; j++) {
-            if (i == j) {
-                A[i][j] = -2;
-            } else if (ABS(i - j) == 1) {
-                A[i][j] = 1;
-            } else {
-                A[i][j] = 0;
+#pragma omp section
+#pragma omp parallel for collapse(2)
+        for (i = 0; i < n; ++i) {
+            for (j = 0; j < n; ++j) {
+                eye[i][j] = (i == j);
             }
         }
     }
 
-//    showMatrix(size, A);
-//    printf("\n");
-    double clock = timer();
+    P = safeMalloc(n * sizeof(size_t));
+    decomposeLUP(n, Acopy, P);
+#pragma omp parallel for
+    for (i = 0; i < n; ++i) {
+        LUPsolve(n,Acopy,P,INVAT[i],eye[i]);
+    }
 
-    solve(size, A, x, b);
+    real** INVA = allocMatrix(n, n);
 
-    clock = timer() - clock;
-    printf("solved in: %fs\nresult:\n", clock);
-
-
-    if (size < 18) {//magic constant
-        showVector(size, x);
-    } else {
-        printf("result is larger than one line, print? (0 is no, 1 is yes)\n");
-        int response;
-        fflush(stdin);
-        do {
-            scanf("%d", &response);
-        } while (!(response == 0 || response == 1));
-
-        if (response != 0) {
-            showVector(size, x);
+    //transpose INVAT into INVA
+#pragma omp parallel for collapse(2)
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            INVA[i][j] = INVAT[j][i];
         }
     }
 
 
-    freeMatrix(A);
-    freeVector(x);
-    freeVector(b);
+    freeMatrix(eye);
+    freeMatrix(Acopy);
+    freeMatrix(INVAT);
+    free(P);
+    return INVA;
+}
+
+int main(int argc, char **argv) {
+    int mode;
+
+    do {
+        printf("mode (0=INV|1=SOLVE): \n");
+        scanf("%d", &mode);
+    } while (!(mode == INV || mode == SOLVE));
+
+    if (mode==SOLVE) {
+        real **A, *x, *b;
+        int size;
+        int num_threads;
+        do {
+            printf("num threads: \n");
+            scanf("%d", &num_threads);
+        } while (num_threads < 1 && printf("err: num_threads < 1"));
+
+        omp_set_num_threads(num_threads);
+        printf("using %d thread(s)\n", omp_get_max_threads());
+        do {
+            printf("size: \n");
+            scanf("%d", &size);
+        } while (size < 1 && printf("err: size < 1"));
+
+        A = allocMatrix(size, size);
+        x = allocVector(size);
+        b = allocVector(size);
+
+        for (int i = 0; i < size; i++) {
+            b[i] = 1;
+            for (int j = 0; j < size; j++) {
+                if (i == j) {
+                    A[i][j] = -2;
+                } else if (ABS(i - j) == 1) {
+                    A[i][j] = 1;
+                } else {
+                    A[i][j] = 0;
+                }
+            }
+        }
+
+        double clock = timer();
+
+        solve(size, A, x, b);
+
+        clock = timer() - clock;
+        printf("solved in: %fs\nresult:\n", clock);
+
+
+        if (size < 18) {//magic constant
+            showVector(size, x);
+        } else {
+            printf("result is larger than one line, print? (0 is no, 1 is yes)\n");
+            int response;
+            fflush(stdin);
+            do {
+                scanf("%d", &response);
+            } while (!(response == 0 || response == 1));
+
+            if (response != 0) {
+                showVector(size, x);
+            }
+        }
+
+
+        freeMatrix(A);
+        freeVector(x);
+        freeVector(b);
+
+    } else if (mode==INV) {
+        real **A;
+        int size = 3;
+        A = allocMatrix(size, size);
+//        A[0][0] = 2; A[0][1] = 6; A[0][2] = 5;
+//        A[1][0] = 3; A[1][1] = 8; A[1][2] = 9;
+//        A[2][0] = 1; A[2][1] = 6; A[2][2] = 4;
+
+        A[0][0] = 5; A[0][1] = 8; A[0][2] = 14;
+        A[1][0] = 4; A[1][1] = 3; A[1][2] = 6;
+        A[2][0] = 7; A[2][1] = 8; A[2][2] = 1;
+
+        printf("invert this:\n");
+        showMatrix(size, A);
+        printf("\n");
+
+        real** INVA = matrixInverse(size, A);
+
+        showMatrix(size, INVA);
+        printf("\n");
+
+        freeMatrix(A);
+        freeMatrix(INVA);
+    }
 
     printf("\n");
     system("echo $USER");
