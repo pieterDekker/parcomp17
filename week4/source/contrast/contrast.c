@@ -81,14 +81,6 @@ Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int 
     return workingImage;
 }
 
-//Image collectChunks(Image dest, Image workingChunk, int numtasks,
-//                    int chunkSize, int *sendCount, int *displs) {
-//    MPI_Gatherv(workingChunk->imdata[0], sendCount[rank], MPI_INT,
-//                dest->imdata, sendCount, displs, MPI_INT, MASTER, MPI_COMM_WORLD);
-//
-//
-//}
-
 int main(int argc, char **argv) {
     Image image;
     int rank;
@@ -123,38 +115,26 @@ int main(int argc, char **argv) {
             sendCount[i] = chunkSize;
             displs[i] = i * chunkSize;
         }
+
         sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
-//        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
-//        displs[numtasks - 1] = 0;
-        displs[0] = 0;
+        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
     }
 
     Image workingChunk = sendChunks(image, numtasks, chunkSize, sendCount, displs);
-
-    printf("past sendChunks\n");
-    assert(displs[0] == 0);
-
     // Do work
     contrastStretch(0, 255, workingChunk);
 
-    printf("past contrastStretch\n");
-    assert(displs[0] == 0);
-
-//    image = collectChunks(image, workingChunk, numtasks, chunkSize, sendCount[rank], displs);
-
-    printf("image %s null\n", image->imdata == NULL ? "is" : "is not");
-    assert(displs[0] == 0);
-
-
     if (rank == MASTER) {
-        printf("now master is the only\n");
-        printf("sendcount: %d\n", sendCount[rank]);
-        printf("displs: %d\n", displs[rank]);
+        for (int i = 0; i < numtasks - 1; i++) {
+            sendCount[i] = chunkSize;
+            displs[i] = i * chunkSize;
+        }
+        sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
+        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
 
         MPI_Gatherv(workingChunk->imdata[0], sendCount[rank], MPI_INT,
                     image->imdata[0], sendCount, displs, MPI_INT, MASTER, MPI_COMM_WORLD);
 
-        printf("past gatherv\n");
         writeImage(image, argv[2]);
         freeImage(image);
     }
