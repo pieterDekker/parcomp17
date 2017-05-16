@@ -70,8 +70,9 @@ Image sendChunks(Image image, int numtasks,int chunkSize) {
     MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
     int *buf = safeMalloc(chunkSize*sizeof(int));
 
-    MPI_Scatter(image->imdata[0], chunkSize, MPI_INT, buf,
-                chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
+
+    MPI_Scatterv(image->imdata[0], sendCounts, displs, MPI_INT, buf,
+                 chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
 
     Image workingImage;
     workingImage->width = chunkSize;
