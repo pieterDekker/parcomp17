@@ -48,6 +48,9 @@ void contrastStretch(int low, int high, Image image) {
     MPI_Bcast(&absMin, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
     MPI_Bcast(&absMax, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
 
+    min = absMin;
+    max = absMax;
+
     //Barrier
     
     // Compute scale factor.
@@ -59,6 +62,8 @@ void contrastStretch(int low, int high, Image image) {
             im[row][col] = scale * (im[row][col] - min);
         }
     }
+
+
 }
 
 Image sendChunks(Image image, int numtasks,int chunkSize) {
@@ -108,6 +113,8 @@ int main(int argc, char **argv) {
 
     // Do work
     //contrastStretch();
+
+    MPI_Gatherv()
 
     if (rank == MASTER) {
         image = collectChunks();
