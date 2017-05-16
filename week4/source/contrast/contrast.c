@@ -12,15 +12,15 @@
 #define MASTER 0
 #define SINGLE 1
 
-void error (char *errmsg) {
-    fputs (errmsg,stderr);
-    exit (EXIT_FAILURE);
+void error(char *errmsg) {
+    fputs(errmsg, stderr);
+    exit(EXIT_FAILURE);
 }
 
-void *safeMalloc (int n) {
-    void *ptr = malloc (n);
+void *safeMalloc(int n) {
+    void *ptr = malloc(n);
     if (ptr == NULL) {
-        error ("Error: memory allocation failed.\n");
+        error("Error: memory allocation failed.\n");
     }
     return ptr;
 }
@@ -66,12 +66,12 @@ void contrastStretch(int low, int high, Image image) {
 
 }
 
-Image sendChunks(Image image, int numtasks,int chunkSize) {
+Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs) {
     MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-    int *buf = safeMalloc(chunkSize*sizeof(int));
+    int *buf = safeMalloc(chunkSize * sizeof(int));
 
-    MPI_Scatter(image->imdata[0], chunkSize, MPI_INT, buf,
-                chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
+    MPI_Scatterv(image->imdata[0], chunkSize, MPI_INT, buf,
+                 chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
 
     Image workingImage;
     workingImage->width = chunkSize;
@@ -80,7 +80,7 @@ Image sendChunks(Image image, int numtasks,int chunkSize) {
     return workingImage;
 }
 
-Image collectChunks(){
+Image collectChunks() {
 
 }
 
@@ -100,6 +100,9 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    int *sendCount;
+    int *displs;
+
     if (rank == MASTER) {
         // Prints current date and user. DO NOT MODIFY
         system("date");
@@ -107,9 +110,19 @@ int main(int argc, char **argv) {
         //Only the master thread executes this
         image = readImage(argv[1]);
         chunkSize = (image->height / numtasks) * image->width;
+
+        *sendCounts = safeMalloc(numtasks * sizeof(int));
+        *displs = safeMalloc(numtasks * sizeof(int));
+
+        for (int i = 0; i < numtasks - 1; i++) {
+            sendCounts[i] = chunkSize;
+            displs[i] = i * chunkSize;
+        }
+        sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
+        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
     }
 
-    Image workingChunk = sendChunks(image, numtasks, chunkSize);
+    Image workingChunk = sendChunks(image, numtasks, chunkSize, sendCount, displs);
 
     // Do work
     //contrastStretch();
