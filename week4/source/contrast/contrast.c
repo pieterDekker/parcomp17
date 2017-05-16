@@ -54,8 +54,8 @@ void contrastStretch(int low, int high, Image image) {
     }
 }
 
-Image sendChunks(Image image, int numtasks) {
-    int chunkSize = (image->height / numtasks) * image->width;
+Image sendChunks(Image image, int numtasks,int chunkSize) {
+    MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
     int *buf = safeMalloc(chunkSize*sizeof(int));
 
     MPI_Scatter(image->imdata[0], image->height * image->width, MPI_INT, buf,
@@ -73,6 +73,7 @@ int main(int argc, char **argv) {
     Image image;
     int rank;
     int numtasks;
+    int chunkSize;
 
     // Initialise MPI environment.
     MPI_Init(&argc, &argv);
@@ -90,9 +91,10 @@ int main(int argc, char **argv) {
         system("echo $USER");
         //Only the master thread executes this
         image = readImage(argv[1]);
+        chunkSize = (image->height / numtasks) * image->width;
     }
 
-    Image workingChunk = sendChunks(image, numtasks);
+    Image workingChunk = sendChunks(image, numtasks, chunkSize);
 
     // Do work
     //contrastStretch();
