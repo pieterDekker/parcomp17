@@ -53,7 +53,7 @@ void contrastStretch(int low, int high, Image image) {
     max = absMax;
 
     //Barrier
-    
+
     // Compute scale factor.
     scale = (float) (high - low) / (max - min);
 
@@ -67,15 +67,14 @@ void contrastStretch(int low, int high, Image image) {
 
 }
 
-Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs) {
-    MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs, int rank) {
     int *buf = safeMalloc(chunkSize * sizeof(int));
 
     MPI_Scatterv(image->imdata[0], sendCounts, displs, MPI_INT, buf,
                  chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
 
-    Image workingImage;
-    workingImage->width = chunkSize;
+    Image workingImage = safeMalloc(sizeof(struct imagestruct));
+    workingImage->width = sendCounts[rank];
     workingImage->height = 1;
     workingImage->imdata[0] = buf;
     return workingImage;
@@ -107,20 +106,23 @@ int main(int argc, char **argv) {
         //Only the master thread executes this
         image = readImage(argv[1]);
         chunkSize = (image->height / numtasks) * image->width;
-
-        sendCount = safeMalloc(numtasks * sizeof(int));
-        displs = safeMalloc(numtasks * sizeof(int));
-
-        for (int i = 0; i < numtasks - 1; i++) {
-            sendCount[i] = chunkSize;
-            displs[i] = i * chunkSize;
-        }
-
-        sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
-        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
     }
 
-    Image workingChunk = sendChunks(image, numtasks, chunkSize, sendCount, displs);
+    MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+
+    sendCount = safeMalloc(numtasks * sizeof(int));
+    displs = safeMalloc(numtasks * sizeof(int));
+
+    for (int i = 0; i < numtasks - 1; i++) {
+        sendCount[i] = chunkSize;
+        displs[i] = i * chunkSize;
+    }
+    printf("%d\n", chunkSize);
+
+    sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
+    displs[numtasks - 1] = (numtasks - 1) * chunkSize;
+
+    Image workingChunk = sendChunks(image, numtasks, chunkSize, sendCount, displs, rank);
     // Do work
     contrastStretch(0, 255, workingChunk);
 
