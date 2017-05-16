@@ -1,0 +1,10 @@
+Script started on di 16 mei 2017 19:06:22 CEST
+
+di mei 16 19:06:32 CEST 2017
+f113582
+Enter two integer number a, b such that 1<=a<=b: 1 50000000
+
+#primes=3001134
+found in 1.88 seconds (real time), worked for 39.38 seconds
+
+Script done on di 16 mei 2017 19:06:59 CEST
