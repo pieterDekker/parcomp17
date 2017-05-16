@@ -11,6 +11,7 @@
 
 #define FALSE 0
 #define TRUE  1
+
 //tags
 #define PARAM 99
 #define SOLUTION 100
@@ -86,7 +87,6 @@ void sendTime(double time) {
 
 void sendParams(int *bs, const int nthreads) {
     for (int i = 1; i < nthreads; ++i) {
-        //bs + (i - 1) is the a of thread i, bs + i is the b of thread i
         MPI_Send(bs + (i - 1), 2, MPI_INT, i, PARAM, MPI_COMM_WORLD);
     }
 }
@@ -94,18 +94,70 @@ void sendParams(int *bs, const int nthreads) {
 void receiveParam(int *a, int *b) {
     int *buf = safeMalloc(2);
     MPI_Status status;
-    MPI_Recv(buf, 2, MPI_INT, MASTER, PARAM, MPI_COMM_WORLD, &status);
+    MPI_Recv(buf, 2, MPI_INT, MPI_ANY_SOURCE, PARAM, MPI_COMM_WORLD, &status);
     *a = buf[0];
     *b = buf[1];
     free(buf);
 }
 
-int calcUPB(int range, int idx, int nthreads, int prev) {
-    return (range / (idx + nthreads - 1)) + prev;
+void calcUPB(int a, int b, int nthreads, int *bs, int eq_const) {
+    int range = b - a;
+    bs[MASTER] = (range / (MASTER + nthreads - eq_const)) + a;
+
+    for (int i = 1; i < nthreads; ++i) {
+        bs[i] = (range / (i + nthreads - eq_const)) + bs[i-1];
+    }
+
+}
+
+int *approachEqUPBS(int a, int b, int nthreads) {
+    int *bs = safeMalloc(nthreads);
+    int error, eq_const = 1, range = b - a;
+    do {
+        calcUPB(a, b, nthreads, bs, eq_const);
+
+        error = b - bs[nthreads - 1];
+        eq_const++;
+    } while (error > 0 && bs[nthreads-1] > 0);
+
+    eq_const--;
+
+    bs[MASTER] = (range / (MASTER + nthreads - eq_const)) + a;
+
+    for (int i = 1; i < nthreads; ++i) {
+        bs[i] = (range / (i + nthreads - eq_const)) + bs[i-1];
+    }
+
+    bs[nthreads-1] = b;
+
+    //uncomment this to see the percentage of the work that each threads gets
+    /*
+    long *iloads = malloc(nthreads * sizeof(int));
+    float *floads = malloc(nthreads * sizeof(float));
+
+    long load, totalLoad = 0;
+    for (int i = 0; i < nthreads; ++i) {
+        load = 0;
+        int low  = (i == MASTER ? a : bs[i - 1]);
+        int high = (i == (nthreads - 1) ? b : bs[i]);
+        for (int i = a; i < b; ++i) {
+            load += sqrt(i);
+        }
+        totalLoad += load;
+        iloads[i] = load;
+    }
+    for (int i = 0; i < nthreads; ++i) {
+        floads[i] = (float)load / (float)totalLoad * 100;
+        printf("%f  ", floads[i]);
+    }
+    printf("\n");
+    */
+
+    return bs;
 }
 
 int main(int argc, char **argv) {
-    unsigned int i, a, b, cnt = 0;
+    unsigned int a, b, cnt = 0;
     int rank, nthreads;
     int local_a, local_b;
 
@@ -128,15 +180,7 @@ int main(int argc, char **argv) {
             a++;
         }
 
-        int range = b - a;
-        int *bs = safeMalloc(nthreads);
-        bs[MASTER] = calcUPB(range, 0, nthreads, a);
-
-        for (int i = 1; i < nthreads; ++i) {
-            bs[i] = calcUPB(range, i, nthreads, bs[i-1]);
-        }
-
-        bs[nthreads-1] = b;
+        int *bs = approachEqUPBS(a, b, nthreads);
 
         sendParams(bs, nthreads);
 
@@ -144,14 +188,14 @@ int main(int argc, char **argv) {
         local_b = bs[MASTER];
 
         free(bs);
+
     } else {
         receiveParam(&local_a, &local_b);
     }
 
-    //sync a, b
-
     //time at start of computation
     double t1 = timer();
+
 
     //do the work
     for (int i = local_a; i < local_b; ++i) {
