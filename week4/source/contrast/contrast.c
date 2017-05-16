@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
+#include <assert.h>
 #include "image.h"
 
 #define MASTER 0
@@ -122,7 +123,6 @@ int main(int argc, char **argv) {
             sendCount[i] = chunkSize;
             displs[i] = i * chunkSize;
         }
-        printf("numtasks: %d\n", numtasks);
         sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
 //        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
 //        displs[numtasks - 1] = 0;
@@ -132,14 +132,18 @@ int main(int argc, char **argv) {
     Image workingChunk = sendChunks(image, numtasks, chunkSize, sendCount, displs);
 
     printf("past sendChunks\n");
+    assert(displs[0] == 0);
 
     // Do work
     contrastStretch(0, 255, workingChunk);
 
     printf("past contrastStretch\n");
+    assert(displs[0] == 0);
+
 //    image = collectChunks(image, workingChunk, numtasks, chunkSize, sendCount[rank], displs);
 
     printf("image %s null\n", image->imdata == NULL ? "is" : "is not");
+    assert(displs[0] == 0);
 
 
     if (rank == MASTER) {
