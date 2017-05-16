@@ -122,9 +122,9 @@ int main(int argc, char **argv) {
             sendCount[i] = chunkSize;
             displs[i] = i * chunkSize;
         }
-        printf("numtasks: %d\n", numtasks);
+//        printf("numtasks: %d\n", numtasks);
         sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
-//        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
+        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
 //        displs[numtasks - 1] = 0;
         displs[0] = 0;
     }
@@ -143,6 +143,14 @@ int main(int argc, char **argv) {
 
 
     if (rank == MASTER) {
+        for (int i = 0; i < numtasks - 1; i++) {
+            sendCount[i] = chunkSize;
+            displs[i] = i * chunkSize;
+        }
+        printf("numtasks: %d\n", numtasks);
+        sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
+        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
+
         printf("now master is the only\n");
         printf("sendcount: %d\n", sendCount[rank]);
         printf("displs: %d\n", displs[rank]);
