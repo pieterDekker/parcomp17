@@ -41,7 +41,12 @@ void contrastStretch(int low, int high, Image image) {
         }
     }
 
-    MPI_Reduce(&min, SINGLE)
+    int absMin, absMax;
+
+    MPI_Reduce(&min, &absMin, SINGLE, MPI_INT, MPI_MIN, MASTER, MPI_COMM_WORLD);
+    MPI_Reduce(&max, &absMax, SINGLE, MPI_INT, MPI_MAX, MASTER, MPI_COMM_WORLD);
+    MPI_Bcast(&absMin, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
+    MPI_Bcast(&absMax, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
 
     //Barrier
     
