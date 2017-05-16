@@ -10,13 +10,13 @@
 #include "image.h"
 
 #define MASTER 0
+#define SINGLE 1
 
 // Stretches the contrast of an image. 
 void contrastStretch(int low, int high, Image image) {
     int row, col, min, max;
     int width = image->width, height = image->height, **im = image->imdata;
     float scale;
-
 
     // Determine minimum and maximum.
     min = max = im[0][0];
@@ -28,8 +28,10 @@ void contrastStretch(int low, int high, Image image) {
         }
     }
 
-    //Barrier
+    MPI_Reduce(&min, SINGLE)
 
+    //Barrier
+    
     // Compute scale factor.
     scale = (float) (high - low) / (max - min);
 
