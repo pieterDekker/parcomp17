@@ -28,6 +28,8 @@ void contrastStretch(int low, int high, Image image) {
         }
     }
 
+    //Barrier
+
     // Compute scale factor.
     scale = (float) (high - low) / (max - min);
 
@@ -39,10 +41,19 @@ void contrastStretch(int low, int high, Image image) {
     }
 }
 
-int sendChunks(Image image, int numtasks){
-    int chunkSize = image->height / numtasks;
-    gatherSize
-    return chunkSize;
+Image sendChunks(Image image, int numtasks) {
+    int chunkSize = (image->height / numtasks) * image->width;
+    int *buf = safeMalloc(chunkSize);
+
+    MPI_Scatter(image->imdata[0], image->height * image->width, MPI_INT, buf,
+                chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
+
+    Image workingImage;
+    printf("%d \n", chunkSize);
+    workingImage->width = chunkSize;
+    workingImage->height = 1;
+    workingImage->imdata[0] = buf;
+    return workingImage;
 }
 
 int main(int argc, char **argv) {
@@ -63,17 +74,17 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    if(rank == MASTER) {
+    if (rank == MASTER) {
         //Only the master thread executes this
         image = readImage(argv[1]);
     }
 
-    Image workingChunk;
-    sendChunks(image,workingChunk,numtasks);
+    Image workingChunk = sendChunks(image, numtasks);
 
     // Do work
+    contrastStretch();
 
-    if(rank == MASTER){
+    if (rank == MASTER) {
         image = collectChunks();
         writeImage(image, argv[2]);
         freeImage(image);
