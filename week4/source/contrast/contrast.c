@@ -11,6 +11,19 @@
 
 #define MASTER 0
 
+void error (char *errmsg) {
+    fputs (errmsg,stderr);
+    exit (EXIT_FAILURE);
+}
+
+void *safeMalloc (int n) {
+    void *ptr = malloc (n);
+    if (ptr == NULL) {
+        error ("Error: memory allocation failed.\n");
+    }
+    return ptr;
+}
+
 // Stretches the contrast of an image. 
 void contrastStretch(int low, int high, Image image) {
     int row, col, min, max;
@@ -43,7 +56,7 @@ void contrastStretch(int low, int high, Image image) {
 
 Image sendChunks(Image image, int numtasks) {
     int chunkSize = (image->height / numtasks) * image->width;
-    int *buf = safeMalloc(chunkSize);
+    int *buf = safeMalloc(chunkSize*sizeof(int));
 
     MPI_Scatter(image->imdata[0], image->height * image->width, MPI_INT, buf,
                 chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
@@ -59,10 +72,7 @@ Image sendChunks(Image image, int numtasks) {
 int main(int argc, char **argv) {
     Image image;
     int rank;
-
-    // Prints current date and user. DO NOT MODIFY
-    system("date");
-    system("echo $USER");
+    int numtasks;
 
     // Initialise MPI environment.
     MPI_Init(&argc, &argv);
@@ -75,6 +85,9 @@ int main(int argc, char **argv) {
     }
 
     if (rank == MASTER) {
+        // Prints current date and user. DO NOT MODIFY
+        system("date");
+        system("echo $USER");
         //Only the master thread executes this
         image = readImage(argv[1]);
     }
@@ -82,10 +95,10 @@ int main(int argc, char **argv) {
     Image workingChunk = sendChunks(image, numtasks);
 
     // Do work
-    contrastStretch();
+    //contrastStretch();
 
     if (rank == MASTER) {
-        image = collectChunks();
+        //image = collectChunks();
         writeImage(image, argv[2]);
         freeImage(image);
     }
