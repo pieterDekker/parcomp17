@@ -58,15 +58,18 @@ Image sendChunks(Image image, int numtasks,int chunkSize) {
     MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
     int *buf = safeMalloc(chunkSize*sizeof(int));
 
-    MPI_Scatter(image->imdata[0], image->height * image->width, MPI_INT, buf,
+    MPI_Scatter(image->imdata[0], chunkSize, MPI_INT, buf,
                 chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
 
     Image workingImage;
-    printf("%d \n", chunkSize);
     workingImage->width = chunkSize;
     workingImage->height = 1;
     workingImage->imdata[0] = buf;
     return workingImage;
+}
+
+Image collectChunks(){
+
 }
 
 int main(int argc, char **argv) {
@@ -100,7 +103,7 @@ int main(int argc, char **argv) {
     //contrastStretch();
 
     if (rank == MASTER) {
-        //image = collectChunks();
+        image = collectChunks();
         writeImage(image, argv[2]);
         freeImage(image);
     }
