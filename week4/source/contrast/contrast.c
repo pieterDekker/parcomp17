@@ -12,20 +12,20 @@
 #define MASTER 0
 #define SINGLE 1
 
-void error (char *errmsg) {
-    fputs (errmsg,stderr);
-    exit (EXIT_FAILURE);
+void error(char *errmsg) {
+    fputs(errmsg, stderr);
+    exit(EXIT_FAILURE);
 }
 
-void *safeMalloc (int n) {
-    void *ptr = malloc (n);
+void *safeMalloc(int n) {
+    void *ptr = malloc(n);
     if (ptr == NULL) {
-        error ("Error: memory allocation failed.\n");
+        error("Error: memory allocation failed.\n");
     }
     return ptr;
 }
 
-// Stretches the contrast of an image.
+// Stretches the contrast of an image. 
 void contrastStretch(int low, int high, Image image) {
     int row, col, min, max;
     int width = image->width, height = image->height, **im = image->imdata;
@@ -52,7 +52,7 @@ void contrastStretch(int low, int high, Image image) {
     max = absMax;
 
     //Barrier
-
+    
     // Compute scale factor.
     scale = (float) (high - low) / (max - min);
 
@@ -66,10 +66,9 @@ void contrastStretch(int low, int high, Image image) {
 
 }
 
-Image sendChunks(Image image, int numtasks,int chunkSize) {
+Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs) {
     MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-    int *buf = safeMalloc(chunkSize*sizeof(int));
-
+    int *buf = safeMalloc(chunkSize * sizeof(int));
 
     MPI_Scatterv(image->imdata[0], sendCounts, displs, MPI_INT, buf,
                  chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
@@ -81,9 +80,13 @@ Image sendChunks(Image image, int numtasks,int chunkSize) {
     return workingImage;
 }
 
-Image collectChunks(){
-
-}
+//Image collectChunks(Image dest, Image workingChunk, int numtasks,
+//                    int chunkSize, int *sendCount, int *displs) {
+//    MPI_Gatherv(workingChunk->imdata[0], sendCount[rank], MPI_INT,
+//                dest->imdata, sendCount, displs, MPI_INT, MASTER, MPI_COMM_WORLD);
+//
+//
+//}
 
 int main(int argc, char **argv) {
     Image image;
@@ -101,6 +104,9 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    int *sendCount;
+    int *displs;
+
     if (rank == MASTER) {
         // Prints current date and user. DO NOT MODIFY
         system("date");
@@ -108,20 +114,47 @@ int main(int argc, char **argv) {
         //Only the master thread executes this
         image = readImage(argv[1]);
         chunkSize = (image->height / numtasks) * image->width;
+
+        sendCount = safeMalloc(numtasks * sizeof(int));
+        displs = safeMalloc(numtasks * sizeof(int));
+
+        for (int i = 0; i < numtasks - 1; i++) {
+            sendCount[i] = chunkSize;
+            displs[i] = i * chunkSize;
+        }
+        printf("numtasks: %d\n", numtasks);
+        sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
+//        displs[numtasks - 1] = (numtasks - 1) * chunkSize;
+//        displs[numtasks - 1] = 0;
+        displs[0] = 0;
     }
 
-    Image workingChunk = sendChunks(image, numtasks, chunkSize);
+    Image workingChunk = sendChunks(image, numtasks, chunkSize, sendCount, displs);
+
+    printf("past sendChunks\n");
 
     // Do work
-    //contrastStretch();
+    contrastStretch(0, 255, workingChunk);
 
-    MPI_Gatherv()
+    printf("past contrastStretch\n");
+//    image = collectChunks(image, workingChunk, numtasks, chunkSize, sendCount[rank], displs);
+
+    printf("image %s null\n", image->imdata == NULL ? "is" : "is not");
+
 
     if (rank == MASTER) {
-        image = collectChunks();
+        printf("now master is the only\n");
+        printf("sendcount: %d\n", sendCount[rank]);
+        printf("displs: %d\n", displs[rank]);
+
+        MPI_Gatherv(workingChunk->imdata[0], sendCount[rank], MPI_INT,
+                    image->imdata[0], sendCount, displs, MPI_INT, MASTER, MPI_COMM_WORLD);
+
+        printf("past gatherv\n");
         writeImage(image, argv[2]);
         freeImage(image);
     }
+
     // Finalise MPI environment.
     MPI_Finalize();
     return EXIT_SUCCESS;
