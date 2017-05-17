@@ -70,8 +70,10 @@ void contrastStretch(int low, int high, Image image) {
 Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs, int rank) {
     int *buf = safeMalloc(chunkSize * sizeof(int));
 
+    printf("%d \n",(image->imdata[0] + rank*chunkSize)[0]);
+
     MPI_Scatterv(image->imdata[0], sendCounts, displs, MPI_INT, buf,
-                 chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
+                 sendCounts[rank], MPI_INT, MASTER, MPI_COMM_WORLD);
 
     Image workingImage = safeMalloc(sizeof(struct imagestruct));
     workingImage->width = sendCounts[rank];
@@ -117,7 +119,6 @@ int main(int argc, char **argv) {
         sendCount[i] = chunkSize;
         displs[i] = i * chunkSize;
     }
-    printf("%d\n", chunkSize);
 
     sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
     displs[numtasks - 1] = (numtasks - 1) * chunkSize;
