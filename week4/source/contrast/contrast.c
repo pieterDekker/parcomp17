@@ -67,15 +67,20 @@ void contrastStretch(int low, int high, Image image) {
 
 }
 
-Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs, int rank) {
-    int *buf = safeMalloc(chunkSize * sizeof(int));
-
+Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs, int rank, int imw, int imh) {
+    int *buf = safeMalloc(imw * imh * sizeof(int));
+    //if (rank != MASTER) {
+			//image = makeImage(imw, imh);
+    printf("sendchunks: buf malloc'd\n");
     MPI_Scatterv(image->imdata[0], sendCounts, displs, MPI_INT, buf,
-                 chunkSize, MPI_INT, MASTER, MPI_COMM_WORLD);
-
+                 sendCounts[rank], MPI_INT, MASTER, MPI_COMM_WORLD);
+		printf("sendchunks: scatterv'd\n");
     Image workingImage = safeMalloc(sizeof(struct imagestruct));
+    printf("sendchunks: Image malloc'd\n");
+    printf("rank: %d, sendcounts[%d]: %d\n", rank, rank, sendCounts[rank]);
     workingImage->width = sendCounts[rank];
     workingImage->height = 1;
+    workingImage->imdata = safeMalloc(workingImage->height * sizeof(int*));
     workingImage->imdata[0] = buf;
     return workingImage;
 }
@@ -105,27 +110,53 @@ int main(int argc, char **argv) {
         system("echo $USER");
         //Only the master thread executes this
         image = readImage(argv[1]);
-        chunkSize = (image->height / numtasks) * image->width;
+				
+				chunkSize = (image->height / numtasks) * image->width;
     }
+    
+    
 
     MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
 
     sendCount = safeMalloc(numtasks * sizeof(int));
     displs = safeMalloc(numtasks * sizeof(int));
-
+		
+		//printf("%d>: sendCounts %s null \n", rank, (sendCount == NULL ? "is" : "is not"));
+		//printf("%d>: displs %s null \n", rank, (displs == NULL ? "is" : "is not"));
+		//printf("%d>: numtasks is %d\n", rank, numtasks);
     for (int i = 0; i < numtasks - 1; i++) {
         sendCount[i] = chunkSize;
+        //printf("\t%d>: set sendCount[%d] to %d\n", rank, i, chunkSize);
         displs[i] = i * chunkSize;
+        //printf("\t%d>: set displs[%d] to %d * %d\n", rank, i, i, chunkSize);
     }
-    printf("%d\n", chunkSize);
-
-    sendCount[numtasks - 1] = image->height * image->width - (numtasks - 1) * chunkSize;
+    //printf("%d>:%d\n", rank, chunkSize);
+		
+		//for (int i = 0; i < numtasks; ++i) {
+			//printf("\t%d>: sendCount[%d] = %d\n", rank, i, sendCount[i]);
+		//}
+		//for (int i = 0; i < numtasks; ++i) {
+			//printf("\t%d>: displs[%d] = %d\n", rank, i, displs[i]);
+		//}
+		//printf("%d>: numtasks = %d\n", rank, numtasks);
+		int imw, imh;
+		if (rank == MASTER) {
+			imh = image->height;
+			imw = image->width;
+		}
+		MPI_Bcast(&imh, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
+		MPI_Bcast(&imw, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
+		
+    sendCount[numtasks - 1] = imh * imw - (numtasks - 1) * chunkSize;
     displs[numtasks - 1] = (numtasks - 1) * chunkSize;
-
-    Image workingChunk = sendChunks(image, numtasks, chunkSize, sendCount, displs, rank);
+		printf("%d>: past sendcount/displs\n", rank);
+		MPI_Barrier(MPI_COMM_WORLD);
+    Image workingChunk = sendChunks(image, numtasks, chunkSize, sendCount, displs, rank, imw, imh);
+    printf("%d>:past sendChunks\n", rank);
     // Do work
     contrastStretch(0, 255, workingChunk);
-
+		printf("past constrastStretch\n");
+		
     if (rank == MASTER) {
         for (int i = 0; i < numtasks - 1; i++) {
             sendCount[i] = chunkSize;
