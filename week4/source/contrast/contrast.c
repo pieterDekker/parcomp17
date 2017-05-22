@@ -63,25 +63,6 @@ void contrastStretch(int low, int high, Image image) {
 	}
 }
 
-//Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs, int rank, int imw, int imh) {
-//	int *buf = safeMalloc(sendCounts[rank] * sizeof(int));
-//	//if (rank != MASTER) {
-//		//image = makeImage(imw, imh);
-//	printf("sendchunks: buf malloc'd\n");
-//	MPI_Scatterv(image->imdata[0], sendCounts, displs, MPI_INT, buf,
-//							 sendCounts[rank], MPI_INT, MASTER, MPI_COMM_WORLD);
-//	printf("sendchunks: scatterv'd\n");
-//
-//	Image workingImage = safeMalloc(sizeof(struct imagestruct));
-//	printf("sendchunks: Image malloc'd\n");
-//	printf("rank: %d, sendcounts[%d]: %d\n", rank, rank, sendCounts[rank]);
-//	workingImage->width = sendCounts[rank];
-//	workingImage->height = 1;
-//	workingImage->imdata = safeMalloc(workingImage->height * sizeof(int*));
-//	workingImage->imdata[0] = buf;
-//	return workingImage;
-//}
-
 /**
  * This funtion wraps MPI_Gatherv, must be integers.
  * @param data The data at root to scatter
@@ -93,25 +74,33 @@ void contrastStretch(int low, int high, Image image) {
  * @return
  */
 int doScattervInt(int *data, int size, int **localdata, int *localsize, int rank, int numprocss) {
+	printf("@sctr size %d numprocss %d for %d\n", size, numprocss, rank);
+	fflush(stdout);
+	
 	int *sendcounts = malloc(sizeof(int)*numprocss);
 	int *displs = malloc(sizeof(int)*numprocss);
 	assert(sendcounts != NULL && displs != NULL);
-	
+
 	int rem = size%numprocss;
 	int sum = 0;
 	for (int i = 0; i < numprocss; i++) {
 			sendcounts[i] = size / numprocss;
 			if (rem > 0) {
+
 					sendcounts[i]++;
 					rem--;
 			}
 			displs[i] = sum;
 			sum += sendcounts[i];
 	}
+
+	printf("@sctr sendcount,displs calc'd for %d\n", rank);
 	
 	*localdata = calloc(sendcounts[rank], sizeof(int));
 	assert(localdata != NULL);
 	*localsize = sendcounts[rank];
+	
+	MPI_Barrier(MPI_COMM_WORLD);
 	
 	return MPI_Scatterv(data, sendcounts, displs, MPI_INT, *localdata, sendcounts[rank], MPI_INT, MASTER, MPI_COMM_WORLD);
 }
@@ -132,6 +121,7 @@ int doGathervInt(int *data, int size, int *localdata, int rank, int numprocss) {
 			displs[i] = sum;
 			sum += sendcounts[i];
 	}
+	printf("@gthr sendcount,displs calc'd\n");
 	
 	return MPI_Gatherv(localdata, sendcounts[rank], MPI_INT, data, sendcounts, displs, MPI_INT, MASTER, MPI_COMM_WORLD);
 }
@@ -141,7 +131,6 @@ int main(int argc, char **argv) {
 	Image image;
 	int rank;
 	int numtasks;
-	int chunkSize;
 
 	// Initialise MPI environment.
 	MPI_Init(&argc, &argv);
@@ -161,9 +150,14 @@ int main(int argc, char **argv) {
 			image = readImage(argv[1]);
 			
 	}
-	
-	MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	printf("init'd, rank %d, commsize %d\n", rank, numtasks);
+	fflush(stdout);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	
 	int imw, imh;
 	if (rank == MASTER) {
 		imh = image->height;
@@ -171,22 +165,33 @@ int main(int argc, char **argv) {
 	}
 	MPI_Bcast(&imh, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
 	MPI_Bcast(&imw, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
-	
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	int *rcvArr, rcvSize;
 
-	doScattervInt()
+	printf("size bcast'd %d * %d\n", imh, imw);
+	fflush(stdout);
 
+	doScattervInt((rank ==  MASTER ? image->imdata[0] : NULL), imh * imw, &rcvArr, &rcvSize, rank, numtasks);
+	printf("scattered\n");
+
+	Image workingChunk;
+	workingChunk->height = 1;
+	workingChunk->width = rcvSize;
+	workingChunk->imdata = safeMalloc(1 * sizeof(int*));
+	workingChunk->imdata[0] = rcvArr;
 
 	// Do work
 	contrastStretch(0, 255, workingChunk);
+	printf("stretched\n");
 
-	MPI_Gatherv(workingChunk->imdata[0], sendCount[rank], MPI_INT,
-									image->imdata[0], sendCount, displs, MPI_INT, MASTER, MPI_COMM_WORLD);
-	
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	doGathervInt((rank ==  MASTER ? image->imdata[0] : NULL), imh * imw, rcvArr, rank, numtasks);
+	printf("gathered\n");
 	if (rank == MASTER) {
-			writeImage(image, argv[2]);
-			freeImage(image);
+		writeImage(image, argv[2]);
+		freeImage(image);
 	}
 
 	// Finalise MPI environment.
