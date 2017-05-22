@@ -63,24 +63,79 @@ void contrastStretch(int low, int high, Image image) {
 	}
 }
 
-Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs, int rank, int imw, int imh) {
-	int *buf = safeMalloc(sendCounts[rank] * sizeof(int));
-	//if (rank != MASTER) {
-		//image = makeImage(imw, imh);
-	printf("sendchunks: buf malloc'd\n");
-	MPI_Scatterv(image->imdata[0], sendCounts, displs, MPI_INT, buf,
-							 sendCounts[rank], MPI_INT, MASTER, MPI_COMM_WORLD);
-	printf("sendchunks: scatterv'd\n");
+//Image sendChunks(Image image, int numtasks, int chunkSize, int *sendCounts, int *displs, int rank, int imw, int imh) {
+//	int *buf = safeMalloc(sendCounts[rank] * sizeof(int));
+//	//if (rank != MASTER) {
+//		//image = makeImage(imw, imh);
+//	printf("sendchunks: buf malloc'd\n");
+//	MPI_Scatterv(image->imdata[0], sendCounts, displs, MPI_INT, buf,
+//							 sendCounts[rank], MPI_INT, MASTER, MPI_COMM_WORLD);
+//	printf("sendchunks: scatterv'd\n");
+//
+//	Image workingImage = safeMalloc(sizeof(struct imagestruct));
+//	printf("sendchunks: Image malloc'd\n");
+//	printf("rank: %d, sendcounts[%d]: %d\n", rank, rank, sendCounts[rank]);
+//	workingImage->width = sendCounts[rank];
+//	workingImage->height = 1;
+//	workingImage->imdata = safeMalloc(workingImage->height * sizeof(int*));
+//	workingImage->imdata[0] = buf;
+//	return workingImage;
+//}
 
-	Image workingImage = safeMalloc(sizeof(struct imagestruct));
-	printf("sendchunks: Image malloc'd\n");
-	printf("rank: %d, sendcounts[%d]: %d\n", rank, rank, sendCounts[rank]);
-	workingImage->width = sendCounts[rank];
-	workingImage->height = 1;
-	workingImage->imdata = safeMalloc(workingImage->height * sizeof(int*));
-	workingImage->imdata[0] = buf;
-	return workingImage;
+/**
+ * This funtion wraps MPI_Gatherv, must be integers.
+ * @param data The data at root to scatter
+ * @param size The size of the data at root to scatter
+ * @param localdata Pointer to the receiving array
+ * @param localsize Size of the receiving array
+ * @param rank
+ * @param numprocss
+ * @return
+ */
+int doScattervInt(int *data, int size, int **localdata, int *localsize, int rank, int numprocss) {
+	int *sendcounts = malloc(sizeof(int)*numprocss);
+	int *displs = malloc(sizeof(int)*numprocss);
+	assert(sendcounts != NULL && displs != NULL);
+	
+	int rem = size%numprocss;
+	int sum = 0;
+	for (int i = 0; i < numprocss; i++) {
+			sendcounts[i] = size / numprocss;
+			if (rem > 0) {
+					sendcounts[i]++;
+					rem--;
+			}
+			displs[i] = sum;
+			sum += sendcounts[i];
+	}
+	
+	*localdata = calloc(sendcounts[rank], sizeof(int));
+	assert(localdata != NULL);
+	*localsize = sendcounts[rank];
+	
+	return MPI_Scatterv(data, sendcounts, displs, MPI_INT, *localdata, sendcounts[rank], MPI_INT, MASTER, MPI_COMM_WORLD);
 }
+
+int doGathervInt(int *data, int size, int *localdata, int rank, int numprocss) {
+	int *sendcounts = malloc(sizeof(int)*numprocss);
+	int *displs = malloc(sizeof(int)*numprocss);
+	assert(sendcounts != NULL && displs != NULL);
+	
+	int rem = size%numprocss;
+	int sum = 0;
+	for (int i = 0; i < numprocss; i++) {
+			sendcounts[i] = size / numprocss;
+			if (rem > 0) {
+					sendcounts[i]++;
+					rem--;
+			}
+			displs[i] = sum;
+			sum += sendcounts[i];
+	}
+	
+	return MPI_Gatherv(localdata, sendcounts[rank], MPI_INT, data, sendcounts, displs, MPI_INT, MASTER, MPI_COMM_WORLD);
+}
+
 
 int main(int argc, char **argv) {
 	Image image;
@@ -98,9 +153,6 @@ int main(int argc, char **argv) {
 			exit(EXIT_FAILURE);
 	}
 
-	int *sendCount;
-	int *displs;
-
 	if (rank == MASTER) {
 			// Prints current date and user. DO NOT MODIFY
 			system("date");
@@ -112,11 +164,6 @@ int main(int argc, char **argv) {
 	
 	MPI_Bcast(&chunkSize, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
 
-	sendCount = safeMalloc(numtasks * sizeof(int));
-	displs = safeMalloc(numtasks * sizeof(int));
-	
-	
-	
 	int imw, imh;
 	if (rank == MASTER) {
 		imh = image->height;
@@ -125,21 +172,12 @@ int main(int argc, char **argv) {
 	MPI_Bcast(&imh, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
 	MPI_Bcast(&imw, SINGLE, MPI_INT, MASTER, MPI_COMM_WORLD);
 	
-	int size = imh * imw;
-	int rem = size%numtasks;
-	int sum = 0;
-	for (int i = 0; i < numtasks; i++) {
-			sendCount[i] = size / numtasks;
-			if (rem > 0) {
-					sendCount[i]++;
-					rem--;
-			}
-			displs[i] = sum;
-			sum += sendCount[i];
-	}
-	
 	MPI_Barrier(MPI_COMM_WORLD);
-	Image workingChunk = sendChunks(image, numtasks, chunkSize, sendCount, displs, rank, imw, imh);
+	int *rcvArr, rcvSize;
+
+	doScattervInt()
+
+
 	// Do work
 	contrastStretch(0, 255, workingChunk);
 
