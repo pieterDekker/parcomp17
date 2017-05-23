@@ -79,7 +79,7 @@ static void boundary(real ***u, int N, int iter, int nsrc, int *src, int *ampl, 
 }
 
 static void solveWave(real ***u, int N, int NFRAMES, int nsrc, int *src, int *ampl, real gridspacing, real timespacing,
-                      real speed, int start, int end) {
+                      real speed, int starti, int endi) {
     // Computes all NFRAMES consecutive frames.
     real sqlambda;
     int i, j, iter;
@@ -88,7 +88,7 @@ static void solveWave(real ***u, int N, int NFRAMES, int nsrc, int *src, int *am
 
     for (iter = 2; iter < NFRAMES; iter++) {
         boundary(u, N, iter, nsrc, src, ampl, timespacing);
-        for (i = start; i < end; i++)
+        for (i = starti; i < endi; i++)
             for (j = 1; j < N - 1; j++)
                 u[iter][i][j] += sqlambda * (u[iter - 1][i + 1][j] + u[iter - 1][i - 1][j] + u[iter - 1][i][j + 1] +
                                              u[iter - 1][i][j - 1]) + (2 - 4 * sqlambda) * u[iter - 1][i][j] -

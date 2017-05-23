@@ -8,15 +8,17 @@
 #define IMAGE_H
 
 // Data type for storing 2D greyscale image.
-typedef struct imagestruct
-{
-	int width, height;
-	int **imdata;
+typedef struct imagestruct {
+    int width, height;
+    int **imdata;
 } *Image;
 
-Image makeImage (int w, int h);
-void freeImage (Image im);
-Image readImage (char *filename);
-void writeImage (Image im, char *filename);
+Image makeImage(int w, int h);
+
+void freeImage(Image im);
+
+Image readImage(char *filename);
+
+void writeImage(Image im, char *filename);
 
 #endif
