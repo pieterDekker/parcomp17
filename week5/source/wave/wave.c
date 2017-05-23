@@ -9,6 +9,8 @@ typedef unsigned char byte;
 
 #define ABS(a) ((a)<0 ? (-(a)) : (a))
 
+#define MASTER
+
 static real ***initialize(int N, int NFRAMES, real dx, real *dt, real v, int nsrc, int **src, int **ampl);
 
 static void boundary(real ***u, int N, int iter, int nsrc, int *src, int *ampl, real timespacing);
@@ -94,6 +96,7 @@ static void solveWave(real ***u, int N, int NFRAMES, int nsrc, int *src, int *am
                                                 u[iter - 1][i][j - 1]) +
                                                 (2 - 4 * sqlambda) * u[iter - 1][i][j] -
                                                 u[iter - 2][i][j];
+        //
     }
 }
 
@@ -136,8 +139,26 @@ int main(int argc, char **argv) {
     fprintf(stdout, "Computing waves\n");
     gettimeofday(&start, NULL);
 
+    //compute numis, starti per task
+    int *numis = malloc(sizeof(int) * numtasks);
+    int *starti = malloc(sizeof(int) * numtasks);
+    assert(numis != NULL && starti != NULL);
+
+    int size = (N - 2);
+    int rem = size % numtasks;
+    int sum = 1;
+    for (int i = 0; i < numtasks; i++) {
+        numis[i] = size / numtasks;
+        if (rem > 0) {
+            numis[i]++;
+            rem--;
+        }
+        starti[i] = sum;
+        sum += numis[i];
+    }
+
     // Render all frames.
-    solveWave(u, N, NFRAMES, n, src, ampl, dx, dt, v);
+    solveWave(u, N, NFRAMES, n, src, ampl, dx, dt, v, starti[rank], starti[rank] + numis[rank]);
 
     // Stop timer; compute flop/s.
     gettimeofday(&end, NULL);
