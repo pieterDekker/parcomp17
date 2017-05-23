@@ -3,6 +3,8 @@
 #include <sys/time.h>
 #include <math.h>
 #include "waveio.h"
+#include <mpi/mpi.h>
+#include <time.h>
 
 typedef float real;
 typedef unsigned char byte;
@@ -88,7 +90,7 @@ static void solveWave(real ***u, int N, int NFRAMES, int nsrc, int *src, int *am
 
     for (iter = 2; iter < NFRAMES; iter++) {
         boundary(u, N, iter, nsrc, src, ampl, timespacing);
-        for (i = 1; i < N - 1; i++)
+        for (i = starti; i < endi; i++)
             for (j = 1; j < N - 1; j++)
                 u[iter][i][j] += sqlambda * (   u[iter - 1][i + 1][j] +
                                                 u[iter - 1][i - 1][j] +
@@ -96,7 +98,8 @@ static void solveWave(real ***u, int N, int NFRAMES, int nsrc, int *src, int *am
                                                 u[iter - 1][i][j - 1]) +
                                                 (2 - 4 * sqlambda) * u[iter - 1][i][j] -
                                                 u[iter - 2][i][j];
-        //
+
+        MPI_Allgather(const void *sendbuf, int sendcount, MPI_INT, void *recvbuf, int recvcount, MPI_INT, MPI_COMM_WORLD);
     }
 }
 
@@ -110,6 +113,9 @@ int main(int argc, char **argv) {
     real dt;            // Time spacing (delta time).
     real dx;            // Grid spacing (distance between grid cells.
     real v;            // Velocity of waves.
+
+    int rank;           // Rank of the current process
+    int size;           // Size of the World group
 
     struct timeval start, end;
     double fstart, fend;
@@ -133,6 +139,10 @@ int main(int argc, char **argv) {
     parseRealOpt(argc, argv, "-s", &v);
 
     // Init.
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD,&size);
+
     u = initialize(N, NFRAMES, dx, &dt, v, n, &src, &ampl);
 
     // Start timer.
@@ -171,6 +181,7 @@ int main(int argc, char **argv) {
     fprintf(stdout, "Saving frames\n");
     stretchContrast(u, N, NFRAMES);
     saveFrames(u, N, NFRAMES, bw);
+    MPI_Finalize();
 
     fprintf(stdout, "Done\n");
     return EXIT_SUCCESS;
