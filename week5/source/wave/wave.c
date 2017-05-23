@@ -5,6 +5,7 @@
 #include "waveio.h"
 #include <mpi/mpi.h>
 #include <time.h>
+#include <assert.h>
 
 typedef float real;
 typedef unsigned char byte;
@@ -18,7 +19,8 @@ static real ***initialize(int N, int NFRAMES, real dx, real *dt, real v, int nsr
 static void boundary(real ***u, int N, int iter, int nsrc, int *src, int *ampl, real timespacing);
 
 static void
-solveWave(real ***u, int N, int NFRAMES, int nsrc, int *src, int *ampl, real gridspacing, real timespacing, real speed);
+solveWave(real ***u, int N, int NFRAMES, int nsrc, int *src, int *ampl, real gridspacing, real timespacing, real speed,
+          int starti, int endi);
 
 static real ***initialize(int N, int NFRAMES, real dx, real *dt, real v, int nsrc, int **src, int **ampl) {
     real ***u;
@@ -92,14 +94,15 @@ static void solveWave(real ***u, int N, int NFRAMES, int nsrc, int *src, int *am
         boundary(u, N, iter, nsrc, src, ampl, timespacing);
         for (i = starti; i < endi; i++)
             for (j = 1; j < N - 1; j++)
-                u[iter][i][j] += sqlambda * (   u[iter - 1][i + 1][j] +
-                                                u[iter - 1][i - 1][j] +
-                                                u[iter - 1][i][j + 1] +
-                                                u[iter - 1][i][j - 1]) +
-                                                (2 - 4 * sqlambda) * u[iter - 1][i][j] -
-                                                u[iter - 2][i][j];
+                u[iter][i][j] += sqlambda * (u[iter - 1][i + 1][j] +
+                                             u[iter - 1][i - 1][j] +
+                                             u[iter - 1][i][j + 1] +
+                                             u[iter - 1][i][j - 1]) +
+                                 (2 - 4 * sqlambda) * u[iter - 1][i][j] -
+                                 u[iter - 2][i][j];
 
-        MPI_Allgather(const void *sendbuf, int sendcount, MPI_INT, void *recvbuf, int recvcount, MPI_INT, MPI_COMM_WORLD);
+        MPI_Allgather(u[iter][starti], N * (endi - starti), MPI_INT, u[iter][starti], N * (endi - starti), MPI_INT,
+                      MPI_COMM_WORLD);
     }
 }
 
@@ -114,8 +117,8 @@ int main(int argc, char **argv) {
     real dx;            // Grid spacing (distance between grid cells.
     real v;            // Velocity of waves.
 
-    int rank;           // Rank of the current process
-    int size;           // Size of the World group
+    int numtasks;           // Rank of the current process
+    int rank;           // Size of the World group
 
     struct timeval start, end;
     double fstart, fend;
@@ -141,7 +144,7 @@ int main(int argc, char **argv) {
     // Init.
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD,&size);
+    MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
 
     u = initialize(N, NFRAMES, dx, &dt, v, n, &src, &ampl);
 
