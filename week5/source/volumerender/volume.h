@@ -10,14 +10,15 @@
 typedef unsigned char byte;
 
 // Data type for storing 3D greyscale volumes.
-typedef struct volumestruct
-{
-	int width, height, depth;
-	byte ***voldata;
+typedef struct volumestruct {
+    int width, height, depth;
+    byte ***voldata;
 } *Volume;
 
-Volume makeVolume (int w, int h, int d);
-void freeVolume (Volume vol);
-Volume readVolume (char *filename);
+Volume makeVolume(int w, int h, int d);
+
+void freeVolume(Volume vol);
+
+Volume readVolume(char *filename);
 
 #endif
