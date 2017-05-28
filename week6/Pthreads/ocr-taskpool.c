@@ -1,7 +1,8 @@
 /* file: ocr.c
  *(C) Arnold Meijster and Rob de Bruin
  *
- * A simple OCR demo program. 
+ * A simple OCR demo program.
+ * Parallelised using a taskpool approach
  */
 
 #include <stdio.h>
@@ -166,7 +167,7 @@ static void threshold(int th, int less, int greater, Image image) {
 
 static void distanceBlur(int background, Image image) {
 /* blur the image by assigning to each pixel a gray value
-   * which is inverse proportional to the distance to 
+   * which is inverse proportional to the distance to
    * its nearest foreground pixel
    */
     int width = image->width, height = image->height, **im = image->imdata;
@@ -316,7 +317,7 @@ static void makeCharImage(int row0, int col0, int row1, int col1, int background
 static int findCharacter(int background, Image image, int row0, int row1, int *col0, int *col1) {
     /* find the bounding box of the left most character
    * with column>=col0 in the linestrip given by row0 and row 1.
-   * Note that col0 is an input/output parameter, while 
+   * Note that col0 is an input/output parameter, while
    * col1 is a strict output parameter.
    * This routine returns TRUE if a character was found,
    * and FALSE otherwise (at end of line).
@@ -387,7 +388,7 @@ static void characterSegmentation(int background, int row0, int row1, Image imag
 static int findLineStrip(int background, int *row0, int *row1, Image image) {
     /* find the first line strip that is encountered
    * when parsing scanlines from top to bottom starting
-   * from row0. Note that row0 is an input/output parameter, while 
+   * from row0. Note that row0 is an input/output parameter, while
    * row1 is a strict output parameter.
    * This routine returns TRUE if a line strip was found,
    * and FALSE otherwise (at end of page).
@@ -520,3 +521,4 @@ int main(int argc, char **argv) {
     }
     return EXIT_SUCCESS;
 }
+
