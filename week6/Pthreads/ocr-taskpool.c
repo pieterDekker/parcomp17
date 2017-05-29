@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <pthread.h>
+#include <sys/time.h>
+#include <string.h>
 
 #define FALSE 0
 #define TRUE  1
@@ -20,7 +23,7 @@
 
 #define CORRTHRESHOLD 0.95
 
-#define DBG 1#if 1
+#define DBG 0
 
 double timer(void) {
     struct timeval tm;
@@ -33,6 +36,15 @@ typedef struct imagestruct {
     int width, height;
     int **imdata;
 } *Image;
+
+typedef struct {
+    char* imName;
+} OcrArgStruct;
+
+typedef struct {
+	char **out;
+	int outSize;
+} OcrReturnStruct; 
 
 int charwidth, charheight;  /* width an height of templates/masks */
 
@@ -48,7 +60,7 @@ static void error(char *errmsg) {
     exit(EXIT_FAILURE);
 }
 
-static void *safeMalloc(int n) {
+static void *safeMalloc(size_t n) {
 /* wrapper function for malloc with error checking */
     void *ptr = malloc(n);
     if (ptr == NULL) {
@@ -338,28 +350,33 @@ static int findCharacter(int background, Image image, int row0, int row1, int *c
     return (*col0 < *col1 ? TRUE : FALSE);
 }
 
-static void characterSegmentation(int background, int row0, int row1, Image image) {
+static void characterSegmentation(int background, int row0, int row1, Image image, char* out) {
     /* Segment a linestrip into characters and perform
-   * character matching using a Pearson correlator.
-   * This routine also prints the output characters.
-   */
+     * character matching using a Pearson correlator.
+     * This routine also prints the output characters to output out.
+     */
     int match, col1, prev = 0, col0 = 0;
+    char *tmp = safeMalloc(sizeof(char) * 4);//24k magic, you gotta believe it, Yes We Can!
     Image token = makeImage(charwidth, charheight);
     while (findCharacter(background, image, row0, row1, &col0, &col1)) {
         /* Was there a space ? */
         if (prev > 0) {
             int i;
             for (i = 0; i < (int) ((col0 - prev) / (1.1 * charwidth)); i++) {
-                printf(" ");
+                strcat(out, " ");
             }
         }
         /* match character */
         makeCharImage(row0, col0, row1, col1, background, image, token);
         match = PearsonCorrelator(token);
+
+
         if (match >= 0) {
-            printf("%c", symbols[match]);
+            sprintf(tmp, "%c", symbols[match]);
+            strcat(out, tmp);
         } else {
-            printf("#%c#", symbols[-match]);
+            sprintf(tmp, "#%c#", symbols[-match]);
+            strcat(out, tmp);
         }
 #if DBG
         {
@@ -381,6 +398,7 @@ static void characterSegmentation(int background, int row0, int row1, Image imag
 #endif
         col0 = prev = col1;
     }
+    free(tmp);
     freeImage(token);
     return;
 }
@@ -408,28 +426,46 @@ static int findLineStrip(int background, int *row0, int *row1, Image image) {
     return (*row0 < *row1 ? TRUE : FALSE);
 }
 
-static void lineSegmentation(int background, Image page) {
-/* Segments a page into line strips. For each line strip
+static void lineSegmentation(int background, Image page, char **out, int *outSize) {
+  /* Segments a page into line strips. For each line strip
    * the character recognition pipeline is started.
    */
-    int row1, row0 = 0, prev = 0;
+
+    int row1, row0 = 0, prev = 0, line = 1;
     while (findLineStrip(background, &row0, &row1, page)) {
+        if (line == *outSize)  {
+            int lineWidth = page->width / charwidth + 1;//magic: one for the null-character
+            int oldSize = *outSize;
+            *outSize *= 2;
+            out = realloc(out, *outSize * sizeof(char*));
+            for (int i = oldSize; i < *outSize; ++i) {
+                out[i] = safeMalloc(sizeof(char) * lineWidth);
+            }
+        }
         /* Was there an empty line? */
         if (prev > 0) {
             int i;
             for (i = 0; i < (int) ((row0 - prev) / (1.2 * charheight)); i++) {
-                printf("\n");
+
+//                sprintf(out[line], "\n");
+                strcat(out[line], "\n");
+//                printf("\n");//todo remove
             }
         }
         /* separate characters in line strip */
-        characterSegmentation(background, row0, row1, page);
+        characterSegmentation(background, row0, row1, page, out[line]);
         row0 = prev = row1;
-        printf("\n");
+//        sprintf(out[line], "\n");
+        strcat(out[line], "\n");
+//        printf("\n");//todo remove
+        line++;
     }
-#if 0
+    *outSize = line;
+#if DBG
     /* You can enable this code fragment for debugging purposes */
     writePGM(page, "segmentation.pgm");
 #endif
+
 }
 
 static void constructAlphabetMasks() {
@@ -488,6 +524,38 @@ static void constructAlphabetMasks() {
     freeImage(alphabet);
 }
 
+void *imageOCRtask(void *ocrArgStruct) {
+    /**
+     * expected args: &OcrArgStruct {char *imName}
+     * expected return: &OcrReturnStruct {char **out, int outSize}
+     */
+    OcrArgStruct *args = ((OcrArgStruct *)ocrArgStruct);
+    char* imName = args->imName;
+    char** out;
+    int outSize;
+    Image image = readPGM(imName);
+
+    outSize = 30;//prepare for 30 lines, dont know whats coming, so check when using
+    int lineWidth = image->width / charwidth + 1;//magic: one for the null-character
+//    printf("linewidth: %d\n", lineWidth);//todo
+    out = safeMalloc(sizeof(char*) * outSize);
+    for (int i = 0; i < outSize; ++i) {
+        out[i] = safeMalloc(sizeof(char) * lineWidth);
+        out[i][0] = '\0';
+    }
+
+    sprintf(out[0] ,"\n--%s----------------------------------\n", imName);
+    threshold(100, FOREGROUND, BACKGROUND, image);
+    lineSegmentation(BACKGROUND, image, out, &outSize);
+    freeImage(image);
+	
+    OcrReturnStruct *result = safeMalloc(sizeof(OcrReturnStruct));
+    result->out = out;
+    result->outSize = outSize;
+
+    return (void *) result;
+}
+
 int main(int argc, char **argv) {
     int i;
     Image image;
@@ -502,20 +570,48 @@ int main(int argc, char **argv) {
 
     double time = timer();
 
-    /* process pages */
-    for (i = 1; i < argc; i++) {
-        printf("\n--%s----------------------------------\n", argv[i]);
-        image = readPGM(argv[i]);
-        threshold(100, FOREGROUND, BACKGROUND, image);
-        lineSegmentation(BACKGROUND, image);
-        freeImage(image);
+    //prepare tasks
+    int numtasks = argc - 1;
+    OcrArgStruct *tasks = safeMalloc(sizeof(OcrArgStruct) * (numtasks));
+    pthread_t *taskIds = safeMalloc(sizeof(pthread_t) * (numtasks));
+    for (int i = 0; i < numtasks; ++i) {
+        OcrArgStruct task;
+        task.imName = argv[i + 1];
+        tasks[i] = task;
+    }
+
+    //start tasks
+    for (i = 0; i < numtasks; i++) {
+        pthread_create(taskIds + i, NULL, imageOCRtask, tasks + i);
+    }
+
+    //finish up tasks
+    OcrReturnStruct *result;
+    void* thread_exit;
+    for (int i = 0; i < numtasks; ++i) {
+        pthread_join(taskIds[i], &thread_exit);
+        result = (OcrReturnStruct *) thread_exit;
+        char** out = result->out;
+        int outSize = result->outSize;
+        for (int j = 0; j < outSize; ++j) {
+            printf("%s", out[j]);
+        }
+        if (outSize < 30) {
+            for (int k = 0; k < 30; ++k) {
+                free(out[k]);
+            }
+        }
+        free(out);
+        free(result);
     }
 
     time = timer() - time;
 
     printf("\n|Finished in %lf second(s)|\n", time);
 
-    /* clean up memory used for alphabet masks */
+    /* clean up memory used for alphabet masks and the rest*/
+    free(tasks);
+    free(taskIds);
     for (i = 0; i < NSYMS; i++) {
         freeImage(mask[i]);
     }

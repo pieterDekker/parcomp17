@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <sys/time.h>
 
 #define FALSE 0
 #define TRUE  1
@@ -19,7 +20,7 @@
 
 #define CORRTHRESHOLD 0.95
 
-#define DBG 1#if 1
+#define DBG 1
 
 double timer(void) {
     struct timeval tm;
