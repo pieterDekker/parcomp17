@@ -43,6 +43,7 @@ typedef struct {
 
 typedef struct {
 	char **out;
+    int line;
 	int outSize;
 } OcrReturnStruct; 
 
@@ -426,41 +427,37 @@ static int findLineStrip(int background, int *row0, int *row1, Image image) {
     return (*row0 < *row1 ? TRUE : FALSE);
 }
 
-static void lineSegmentation(int background, Image page, char **out, int *outSize) {
+static void lineSegmentation(int background, Image page, char **out, int *outSize, int *line) {
   /* Segments a page into line strips. For each line strip
    * the character recognition pipeline is started.
    */
 
-    int row1, row0 = 0, prev = 0, line = 1;
+    int row1, row0 = 0, prev = 0;
+    *line = 1;
     while (findLineStrip(background, &row0, &row1, page)) {
-        if (line == *outSize)  {
+        if (*line == *outSize)  {
             int lineWidth = page->width / charwidth + 1;//magic: one for the null-character
             int oldSize = *outSize;
             *outSize *= 2;
             out = realloc(out, *outSize * sizeof(char*));
             for (int i = oldSize; i < *outSize; ++i) {
                 out[i] = safeMalloc(sizeof(char) * lineWidth);
+                out[i][0] = '\0';
             }
         }
         /* Was there an empty line? */
         if (prev > 0) {
             int i;
             for (i = 0; i < (int) ((row0 - prev) / (1.2 * charheight)); i++) {
-
-//                sprintf(out[line], "\n");
-                strcat(out[line], "\n");
-//                printf("\n");//todo remove
+                strcat(out[*line ], "\n");
             }
         }
         /* separate characters in line strip */
-        characterSegmentation(background, row0, row1, page, out[line]);
+        characterSegmentation(background, row0, row1, page, out[*line ]);
         row0 = prev = row1;
-//        sprintf(out[line], "\n");
-        strcat(out[line], "\n");
-//        printf("\n");//todo remove
-        line++;
+        strcat(out[*line ], "\n");
+        (*line)++;
     }
-    *outSize = line;
 #if DBG
     /* You can enable this code fragment for debugging purposes */
     writePGM(page, "segmentation.pgm");
@@ -532,12 +529,11 @@ void *imageOCRtask(void *ocrArgStruct) {
     OcrArgStruct *args = ((OcrArgStruct *)ocrArgStruct);
     char* imName = args->imName;
     char** out;
-    int outSize;
+    int outSize, line;
     Image image = readPGM(imName);
 
     outSize = 30;//prepare for 30 lines, dont know whats coming, so check when using
     int lineWidth = image->width / charwidth + 1;//magic: one for the null-character
-//    printf("linewidth: %d\n", lineWidth);//todo
     out = safeMalloc(sizeof(char*) * outSize);
     for (int i = 0; i < outSize; ++i) {
         out[i] = safeMalloc(sizeof(char) * lineWidth);
@@ -546,12 +542,13 @@ void *imageOCRtask(void *ocrArgStruct) {
 
     sprintf(out[0] ,"\n--%s----------------------------------\n", imName);
     threshold(100, FOREGROUND, BACKGROUND, image);
-    lineSegmentation(BACKGROUND, image, out, &outSize);
+    lineSegmentation(BACKGROUND, image, out, &outSize, &line);
     freeImage(image);
 	
     OcrReturnStruct *result = safeMalloc(sizeof(OcrReturnStruct));
     result->out = out;
     result->outSize = outSize;
+    result->line = line;
 
     return (void *) result;
 }
@@ -593,14 +590,16 @@ int main(int argc, char **argv) {
         result = (OcrReturnStruct *) thread_exit;
         char** out = result->out;
         int outSize = result->outSize;
-        for (int j = 0; j < outSize; ++j) {
-            printf("%s", out[j]);
+        int line = result->line;
+
+        for (int j = 0; j < line; ++j) {
+            printf("%02d%s", j, out[j]);
         }
-        if (outSize < 30) {
-            for (int k = 0; k < 30; ++k) {
-                free(out[k]);
-            }
+
+        for (int k = 0; k < outSize; ++k) {
+            free(out[k]);
         }
+
         free(out);
         free(result);
     }
