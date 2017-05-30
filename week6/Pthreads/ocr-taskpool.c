@@ -25,6 +25,8 @@
 
 #define DBG 0
 
+#define MIN_OUT_SIZE 30
+
 double timer(void) {
     struct timeval tm;
     gettimeofday(&tm, NULL);
@@ -44,7 +46,7 @@ typedef struct {
 typedef struct {
 	char **out;
     int line;
-	int outSize;
+	int numLines;
 } OcrReturnStruct; 
 
 int charwidth, charheight;  /* width an height of templates/masks */
@@ -427,7 +429,7 @@ static int findLineStrip(int background, int *row0, int *row1, Image image) {
     return (*row0 < *row1 ? TRUE : FALSE);
 }
 
-static void lineSegmentation(int background, Image page, char **out, int *outSize, int *line) {
+static void lineSegmentation(int background, Image page, char **out, int *line) {
   /* Segments a page into line strips. For each line strip
    * the character recognition pipeline is started.
    */
@@ -435,16 +437,6 @@ static void lineSegmentation(int background, Image page, char **out, int *outSiz
     int row1, row0 = 0, prev = 0;
     *line = 1;
     while (findLineStrip(background, &row0, &row1, page)) {
-        if (*line == *outSize)  {
-            int lineWidth = page->width / charwidth + 1;//magic: one for the null-character
-            int oldSize = *outSize;
-            *outSize *= 2;
-            out = realloc(out, *outSize * sizeof(char*));
-            for (int i = oldSize; i < *outSize; ++i) {
-                out[i] = safeMalloc(sizeof(char) * lineWidth);
-                out[i][0] = '\0';
-            }
-        }
         /* Was there an empty line? */
         if (prev > 0) {
             int i;
@@ -524,30 +516,30 @@ static void constructAlphabetMasks() {
 void *imageOCRtask(void *ocrArgStruct) {
     /**
      * expected args: &OcrArgStruct {char *imName}
-     * expected return: &OcrReturnStruct {char **out, int outSize}
+     * expected return: &OcrReturnStruct {char **out, int numLines}
      */
     OcrArgStruct *args = ((OcrArgStruct *)ocrArgStruct);
     char* imName = args->imName;
     char** out;
-    int outSize, line;
+    int numLines, line;
     Image image = readPGM(imName);
 
-    outSize = 30;//prepare for 30 lines, dont know whats coming, so check when using
+    numLines = image->height / charheight;
     int lineWidth = image->width / charwidth + 1;//magic: one for the null-character
-    out = safeMalloc(sizeof(char*) * outSize);
-    for (int i = 0; i < outSize; ++i) {
+    out = safeMalloc(sizeof(char*) * numLines);
+    for (int i = 0; i < numLines; ++i) {
         out[i] = safeMalloc(sizeof(char) * lineWidth);
         out[i][0] = '\0';
     }
 
     sprintf(out[0] ,"\n--%s----------------------------------\n", imName);
     threshold(100, FOREGROUND, BACKGROUND, image);
-    lineSegmentation(BACKGROUND, image, out, &outSize, &line);
+    lineSegmentation(BACKGROUND, image, out, &line);
     freeImage(image);
 	
     OcrReturnStruct *result = safeMalloc(sizeof(OcrReturnStruct));
     result->out = out;
-    result->outSize = outSize;
+    result->numLines = numLines;
     result->line = line;
 
     return (void *) result;
@@ -589,14 +581,14 @@ int main(int argc, char **argv) {
         pthread_join(taskIds[i], &thread_exit);
         result = (OcrReturnStruct *) thread_exit;
         char** out = result->out;
-        int outSize = result->outSize;
+        int numLines = result->numLines;
         int line = result->line;
 
         for (int j = 0; j < line; ++j) {
-            printf("%02d%s", j, out[j]);
+            printf("%s", out[j]);
         }
 
-        for (int k = 0; k < outSize; ++k) {
+        for (int k = 0; k < numLines; ++k) {
             free(out[k]);
         }
 
