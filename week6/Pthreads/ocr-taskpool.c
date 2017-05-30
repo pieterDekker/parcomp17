@@ -521,11 +521,13 @@ void *imageOCRtask(void *ocrArgStruct) {
     OcrArgStruct *args = ((OcrArgStruct *)ocrArgStruct);
     char* imName = args->imName;
     char** out;
-    int numLines, line;
+    int numLines, line, lineWidth;
     Image image = readPGM(imName);
 
     numLines = image->height / charheight;
-    int lineWidth = image->width / charwidth + 1;//magic: one for the null-character
+    lineWidth = image->width / charwidth + 1;
+    
+    //allocate empty strings
     out = safeMalloc(sizeof(char*) * numLines);
     for (int i = 0; i < numLines; ++i) {
         out[i] = safeMalloc(sizeof(char) * lineWidth);
