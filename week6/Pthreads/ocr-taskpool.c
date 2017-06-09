@@ -40,10 +40,6 @@ typedef struct imagestruct {
 } *Image;
 
 typedef struct {
-    char* imName;
-} OcrArgStruct;
-
-typedef struct {
 	char **out;
     int line;
 	int numLines;
@@ -513,13 +509,12 @@ static void constructAlphabetMasks() {
     freeImage(alphabet);
 }
 
-void *imageOCRtask(void *ocrArgStruct) {
+void *imageOCRtask(void *task) {
     /**
      * expected args: &OcrArgStruct {char *imName}
      * expected return: &OcrReturnStruct {char **out, int numLines}
      */
-    OcrArgStruct *args = ((OcrArgStruct *)ocrArgStruct);
-    char* imName = args->imName;
+    char* imName = ((char *) task);
     char** out;
     int numLines, line, lineWidth;
     Image image = readPGM(imName);
@@ -563,24 +558,19 @@ int main(int argc, char **argv) {
 
     //prepare tasks
     int numtasks = argc - 1;
-    OcrArgStruct *tasks = safeMalloc(sizeof(OcrArgStruct) * (numtasks));
-    pthread_t *taskIds = safeMalloc(sizeof(pthread_t) * (numtasks));
-    for (int i = 0; i < numtasks; ++i) {
-        OcrArgStruct task;
-        task.imName = argv[i + 1];
-        tasks[i] = task;
-    }
+    pthread_t *threadIds = safeMalloc(sizeof(pthread_t) * (numtasks));
 
     //start tasks
     for (i = 0; i < numtasks; i++) {
-        pthread_create(taskIds + i, NULL, imageOCRtask, tasks + i);
+				char *task = argv[i + 1];
+        pthread_create(threadIds + i, NULL, imageOCRtask, task);
     }
 
     //finish up tasks
     OcrReturnStruct *result;
     void* thread_exit;
     for (int i = 0; i < numtasks; ++i) {
-        pthread_join(taskIds[i], &thread_exit);
+        pthread_join(threadIds[i], &thread_exit);
         result = (OcrReturnStruct *) thread_exit;
         char** out = result->out;
         int numLines = result->numLines;
@@ -603,8 +593,7 @@ int main(int argc, char **argv) {
     printf("\n|Finished in %lf second(s)|\n", time);
 
     /* clean up memory used for alphabet masks and the rest*/
-    free(tasks);
-    free(taskIds);
+    free(threadIds);
     for (i = 0; i < NSYMS; i++) {
         freeImage(mask[i]);
     }
