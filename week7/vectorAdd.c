@@ -13,6 +13,7 @@
 // DO NOT CHANGE OTHERWISE THE RESULTS WILL DIFFER
 // Random number generator with set seed.
 static long holdrand = 23;
+
 long random() {
     return (((holdrand = holdrand * 214013L + 2531011L) >> 16) & 0x7fff);
 }
@@ -24,15 +25,15 @@ static double timer(void) {
 }
 
 // OpenCL kernel to perform an element-wise add of two arrays
-const char* programSource =
-    "__kernel                                            \n"
-    "void vecadd(__global int *A,                        \n"
-    "            __global int *B,                        \n"
-    "            __global int *C)                        \n"
-    "{                                                   \n"
-    "   int localId = get_local_id(0);                   \n"
-    "   C[localId] = A[localId] + B[localId]             \n"
-    "}                                                   \n";
+const char *programSource =
+                "__kernel                                            \n"
+                "void vecadd(__global int *A,                        \n"
+                "            __global int *B,                        \n"
+                "            __global int *C)                        \n"
+                "{                                                   \n"
+                "   int localId = get_local_id(0);                   \n"
+                "   C[localId] = A[localId] + B[localId]             \n"
+                "}                                                   \n";
 
 // Use this to check the output of each API call
 cl_int status = 0;
@@ -44,59 +45,61 @@ cl_context context = NULL;
 cl_command_queue cmdQueue = NULL;
 cl_program program = NULL;
 cl_kernel kernel = NULL;
+
 /* Your probably going to need some more cl_specific type variables*/
 
 void initOpenCL() {
-    // select OpenCL platform with clGetPlatformIDs(...)
-    fprintf (stdout, "platform selected\n");
+    cl_int err = clGetPlatformIDs(1, &platforms[0], &numPlatforms);
+    fprintf(stdout, "platform selected\n");
 
-    // select OpenCL device with clGetDeviceIDs(...). Ensure that only GPUs will be selected
-    fprintf (stdout, "device selected\n");
+    err = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, 1, &devices[0], &numDevices);
+    fprintf(stdout, "device selected\n");
 
-    // create OpenCL context with clCreateContext(...)
-    fprintf (stdout, "context created\n");
+    context = clCreateContext(NULL, 1, &devices[0], NULL, NULL, &err);
+    fprintf(stdout, "context created\n");
 
-    // create OpenCL command queue with clCreateCommandQueue(...)
-    fprintf (stdout, "commandQueue created\n");
+    cmdQueue = clCreateCommandQueue(context, devices, 0, &err);
+    fprintf(stdout, "commandQueue created\n");
 }
 
 void createMemBuffers(/* Insert your parameters */) {
-    
+
     // Use clCreateBuffer() to create a buffer object
     // that will contain the data from the host array
-    fprintf (stdout, "memory buffers created\n");
+    fprintf(stdout, "memory buffers created\n");
 
     // Use clEnqueueWriteBuffer() to write input array to the device buffer
-    fprintf (stdout, "queue created\n");
+    fprintf(stdout, "queue created\n");
 }
 
 void executeCode(/* Insert your parameters */) {
 
     // Create a program using clCreateProgramWithSource()
-    fprintf (stdout, "program created\n");
+    fprintf(stdout, "program created\n");
 
     // build OpenCL program with clBuildProgram(...)
-    fprintf (stdout, "program build successfully\n");
+    fprintf(stdout, "program build successfully\n");
 
     // Use clCreateKernel() to create a kernel from the vector addition function
     // (named "vecadd")
-    fprintf (stdout, "kernel created\n");
+    fprintf(stdout, "kernel created\n");
 
     // Associate the buffers with the kernel using clSetKernelArg()
-    fprintf (stdout, "set kernel arguments\n");
-    
+    fprintf(stdout, "set kernel arguments\n");
+
     // Enqueue OpenCL kernel with clEnqueuNDRangeKernel(...)
     fprintf(stdout, "enqueued kernel\n");
 }
 
-void cleanup(/* Insert your parameters */){
+void cleanup(/* Insert your parameters */) {
     // Free OpenCL resources
     clReleaseKernel(kernel);
     clReleaseProgram(program);
     clReleaseCommandQueue(cmdQueue);
     clReleaseContext(context);
 }
-int main(int argc, char** argv) {
+
+int main(int argc, char **argv) {
     // This code executes on the OpenCL host
 
     // Elements in each array
@@ -116,9 +119,9 @@ int main(int argc, char** argv) {
     int *C = NULL;  // Output array
 
     // Allocate space for input/output data
-    A = (int*)malloc(datasize);
-    B = (int*)malloc(datasize);
-    C = (int*)malloc(datasize);
+    A = (int *) malloc(datasize);
+    B = (int *) malloc(datasize);
+    C = (int *) malloc(datasize);
 
     // Initialize the input data
     // DO NOT CHANGE THIS AS THIS WILL INFLUENCE THE OUTCOME AND THUS RESULTS 
@@ -160,7 +163,13 @@ int main(int argc, char** argv) {
 
     // output the username, time and requested values from the Nestor questions
 
-    // Don't forget to cleanup resources
+    system("date");
+    system("echo $USER");
+
+    cleanup();
+    free(A);
+    free(B);
+    free(C);
 
     return 0;
 }
