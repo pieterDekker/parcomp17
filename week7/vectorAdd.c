@@ -26,7 +26,7 @@ static double timer(void) {
 
 // OpenCL kernel to perform an element-wise add of two arrays
 const char *programSource =
-                "__kernel                                            \n"
+        "__kernel                                            \n"
                 "void vecadd(__global int *A,                        \n"
                 "            __global int *B,                        \n"
                 "            __global int *C)                        \n"
@@ -62,13 +62,15 @@ void initOpenCL() {
     fprintf(stdout, "commandQueue created\n");
 }
 
-void createMemBuffers(/* Insert your parameters */) {
+void createMemBuffers(int datasize) {
 
-    // Use clCreateBuffer() to create a buffer object
-    // that will contain the data from the host array
+    cl_mem A_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, &err);
+    cl_mem B_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, &err);
+    cl_mem C_mem = clCreateBuffer(context, CL_MEM_WRITE_ONLY, datasize, NULL, &err);
     fprintf(stdout, "memory buffers created\n");
 
-    // Use clEnqueueWriteBuffer() to write input array to the device buffer
+    cl_int err = clEnqueueWriteBuffer(cmdQueue, A_mem, CL_TRUE, 0, datasize, A, 0, NULL, NULL);
+    err = clEnqueueWriteBuffer(cmdQueue, B_mem, CL_TRUE, 0, datasize, B, 0, NULL, NULL);
     fprintf(stdout, "queue created\n");
 }
 
