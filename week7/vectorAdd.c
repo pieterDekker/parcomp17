@@ -35,6 +35,8 @@ const char *programSource =
                 "   C[localId] = A[localId] + B[localId]             \n"
                 "}                                                   \n";
 
+const int sourceSize = sizeof(const char) * 54 * 8;
+
 // Use this to check the output of each API call
 cl_int status = 0;
 cl_uint numPlatforms = 0;
@@ -46,10 +48,13 @@ cl_command_queue cmdQueue = NULL;
 cl_program program = NULL;
 cl_kernel kernel = NULL;
 
-/* Your probably going to need some more cl_specific type variables*/
+cl_int err;
+cl_mem A_mem;
+cl_mem B_mem;
+cl_mem C_mem;
 
 void initOpenCL() {
-    cl_int err = clGetPlatformIDs(1, &platforms[0], &numPlatforms);
+    err = clGetPlatformIDs(1, &platforms[0], &numPlatforms);
     fprintf(stdout, "platform selected\n");
 
     err = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, 1, &devices[0], &numDevices);
@@ -62,50 +67,55 @@ void initOpenCL() {
     fprintf(stdout, "commandQueue created\n");
 }
 
-void createMemBuffers(int datasize) {
+void createMemBuffers(int datasize, int *A, int *B) {
 
-    cl_mem A_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, &err);
-    cl_mem B_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, &err);
-    cl_mem C_mem = clCreateBuffer(context, CL_MEM_WRITE_ONLY, datasize, NULL, &err);
+    A_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, &err);
+    B_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, &err);
+    C_mem = clCreateBuffer(context, CL_MEM_WRITE_ONLY, datasize, NULL, &err);
     fprintf(stdout, "memory buffers created\n");
 
-    cl_int err = clEnqueueWriteBuffer(cmdQueue, A_mem, CL_TRUE, 0, datasize, A, 0, NULL, NULL);
+    err = clEnqueueWriteBuffer(cmdQueue, A_mem, CL_TRUE, 0, datasize, A, 0, NULL, NULL);
     err = clEnqueueWriteBuffer(cmdQueue, B_mem, CL_TRUE, 0, datasize, B, 0, NULL, NULL);
     fprintf(stdout, "queue created\n");
 }
 
-void executeCode(/* Insert your parameters */) {
+void executeCode(int datasize, int *C) {
 
-    // Create a program using clCreateProgramWithSource()
+    program = clCreateProgramWithSource(context, 1, programSource, sourceSize, &err);
     fprintf(stdout, "program created\n");
 
-    // build OpenCL program with clBuildProgram(...)
-    fprintf(stdout, "program build successfully\n");
+    err = clBuildProgram(program, 1, &devices[0], NULL, NULL, NULL);
+    fprintf(stdout, "program built successfully\n");
 
-    // Use clCreateKernel() to create a kernel from the vector addition function
-    // (named "vecadd")
+    kernel = clCreateKernel(program, "vecadd", &err);
     fprintf(stdout, "kernel created\n");
 
-    // Associate the buffers with the kernel using clSetKernelArg()
+    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *) &A_mem);
+    err = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *) &B_mem);
+    err = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *) &C_mem);
     fprintf(stdout, "set kernel arguments\n");
 
-    // Enqueue OpenCL kernel with clEnqueuNDRangeKernel(...)
+    err = clEnqueueNDRangeKernel(cmdQueue, C_mem, CL_TRUE, 0, datasize, C, 0, NULL, NULL);
     fprintf(stdout, "enqueued kernel\n");
 }
 
-void cleanup(/* Insert your parameters */) {
+void cleanup(int *A, int *B, int *C) {
     // Free OpenCL resources
     clReleaseKernel(kernel);
     clReleaseProgram(program);
     clReleaseCommandQueue(cmdQueue);
     clReleaseContext(context);
+
+    free(A);
+    free(B);
+    free(C);
 }
 
 int main(int argc, char **argv) {
     // This code executes on the OpenCL host
 
     // Elements in each array
-    int elements;
+    int elements, datasize;
 
     if (argc == 2) {
         elements = atoi(argv[1]);
@@ -137,8 +147,8 @@ int main(int argc, char **argv) {
     gettimeofday(&start, NULL);
 
     initOpenCL();
-    createMemBuffers(/* Insert your parameters */);
-    executeCode(/* Insert your parameters */);
+    createMemBuffers(datasize, A, B);
+    executeCode(datasize, C);
 
     gettimeofday(&end, NULL);
     printf("time elapsed OpenCL: %fmsecs\n",
@@ -169,9 +179,6 @@ int main(int argc, char **argv) {
     system("echo $USER");
 
     cleanup();
-    free(A);
-    free(B);
-    free(C);
 
     return 0;
 }
