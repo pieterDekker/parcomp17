@@ -20,18 +20,35 @@ static double timer(void) {
 
 // OpenCL kernel to perform an element-wise add of two arrays
 const char* programSource =
-    "kernel void MatrixMultKernel(global float * Pd,                \n"
-    "const global float * Md,                                       \n"
-    "const global float * Nd) {                                     \n"
-    "}                                                              \n";
-
-
+    "__kernel void matrixMultKernel(__global float *Pd,            \n"
+    "const __global float *Md,                                     \n"
+    "const __global float *Nd) {                                   \n"
+    "  int globalId = get_global_id(0);                            \n"
+    "  int width = sqrt(get_global_size(0)/sizeof(float));         \n"
+    "  int col = globalId % width;                                 \n"
+    "  int row = globalId / width;                                 \n"       
+    "  float result = 0;                                           \n"
+    "  for(int i = 0; i < width; ++i){                             \n"
+    "    float Mval = M[width * i + col];                          \n"
+    "    float Nval = N[width * row + i];                          \n"
+    "    result += Mval * Nval;                                    \n"
+    "  }                                                           \n" 
+    "                                                              \n"
+    "  Pd[globalId] = result;                                      \n"
+    "}                                                             \n";
+size_t programSourceSize;
 
 float *M;
 float *N;
 float *P_opencl;
 float *P_seq;
+
+cl_mem M_mem;
+cl_mem N_mem;
+cl_mem P_mem;
+
 int width;
+size_t datasize;
 
 // Fill f width size many random float values
 void fill(float *f, int size) {
@@ -77,9 +94,9 @@ int err;
 
 cl_int status = 0;
 cl_uint numPlatforms = 0;
-cl_platform_id *platforms = NULL;
+cl_platform_id platforms = NULL;
 cl_uint numDevices = 0;
-cl_device_id *devices = NULL;
+cl_device_id devices = NULL;
 cl_context context = NULL;
 cl_command_queue cmdQueue = NULL;
 cl_program program = NULL;
@@ -87,75 +104,85 @@ cl_kernel kernel = NULL;
 
 // initialize OpenCL
 void initOpenCL() {
-    // select OpenCL platform with clGetPlatformIDs(...)
-    fprintf (stdout, "platform selected\n");
+  
+    err = clGetPlatformIDs(1, &platforms, &numPlatforms);
+    fprintf(stdout, "platform selected\n");
 
-    // select OpenCL device with clGetDeviceIDs(...). Ensure that only GPUs will be selected
-    fprintf (stdout, "device selected\n");
+    err = clGetDeviceIDs(platforms, CL_DEVICE_TYPE_GPU, 1, &devices, 
+                          &numDevices);
+    fprintf(stdout, "device selected\n");
 
-    // create OpenCL context with clCreateContext(...)
-    fprintf (stdout, "context created\n");
+    context = clCreateContext(NULL, 1, &devices, NULL, NULL, &err);
+    fprintf(stdout, "context created\n");
 
-    // create OpenCL command queue with clCreateCommandQueue(...)
-    fprintf (stdout, "commandQueue created\n");
+    cmdQueue = clCreateCommandQueue(context, devices, 0, &err);
+    fprintf(stdout, "commandQueue created\n");
 }
 
-void executeCode(/* Insert your parameters */) {
+void createKernel() {
+    program = clCreateProgramWithSource(context, 1, &programSource,  
+                                          &programSourceSize, &err);
+    fprintf(stdout, "program created\n");
 
-    // Create a program using clCreateProgramWithSource()
-    fprintf (stdout, "program created\n");
+    err = clBuildProgram(program, 1, &devices, NULL, NULL, NULL);
+    fprintf(stdout, "program built successfully\n");
 
-    // build OpenCL program with clBuildProgram(...)
-    fprintf (stdout, "program build successfully\n");
-
-    // Use clCreateKernel() to create a kernel from the vector addition function
-    // (named "vecadd")
-    fprintf (stdout, "kernel created\n");
-
-    // Associate the buffers with the kernel using clSetKernelArg()
-    fprintf (stdout, "set kernel arguments\n");
-    
-    // Enqueue OpenCL kernel with clEnqueuNDRangeKernel(...)
-    fprintf(stdout, "enqueued kernel\n");
+    kernel = clCreateKernel(program, "matrixMultKernel", &err);
+    fprintf(stdout, "kernel created\n"); 
 }
 
 void MatrixMulOpenCL(float *M, float *N, float *P, int width) {
     int size = width * width * sizeof(float);
 
-    // create OpenCL buffer for M with clCreateBuffer(...)
-    // and copy to device with clEnqueueWriteBuffer(...)
+    M_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, 
+                            &err);
+    err = clEnqueueWriteBuffer(cmdQueue, M_mem, CL_TRUE, 0, datasize, M, 
+                                0, NULL, NULL);
     fprintf(stdout, "buffer for M created and copied\n");
 
-    // create OpenCL buffer for N with clCreateBuffer(...)
-    // and copy to device with clEnqueueWriteBuffer(...)
+    N_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, 
+                            &err);
+    err = clEnqueueWriteBuffer(cmdQueue, N_mem, CL_TRUE, 0, datasize, N, 
+                                0, NULL, NULL);
     fprintf(stdout, "buffer for N created and copied\n");
 
-    // create OpenCL buffer for P with clCreateBuffer(...)
+    P_mem = clCreateBuffer(context, CL_MEM_WRITE_ONLY, datasize, NULL, 
+                            &err);
     fprintf(stdout, "buffer for P created\n");
 
     // set OpenCL kernel arguments with clSetKernelArg(...)
+    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *) &M_mem);
+    err = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *) &N_mem);
+    err = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *) &P_mem);
     fprintf(stdout, "kernel arguments set\n");
 
     // enqueue OpenCL kernel with clEnqueuNDRangeKernel(...)
+    err = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, NULL, &datasize, 
+                                  NULL, 0, NULL, NULL);
     fprintf(stdout, "enqueued kernel\n");
 
     // Wait for the command cmdQueue to get serviced before reading back results
     clFinish(cmdQueue);
 
     // read data from OpenCL buffer for P into P with clEnqueueReadBuffer(...)
+    clEnqueueReadBuffer(cmdQueue, P_mem, CL_TRUE, 0, datasize, P_opencl, 0,
+                        NULL, NULL);
     fprintf(stdout, "read buffer P\n");
 }
 
 // end OpenCL code
 // ######################################################
 
-void init() {
+void init(int argc, char** argv) {
     if (argc == 2) {
         width = atoi(argv[1]);
     } else {
         printf("Usage: matrixMult <elements>\nWhere elements is the length and width of the matrix.\n");
-        return -1;
+        exit(-1);
     }
+    
+    programSourceSize = strlen(programSource) * sizeof(char);
+    datasize = width * width * sizeof(float);
 
     M = (float *) malloc(width * width * sizeof(float));
     N = (float *) malloc(width * width * sizeof(float));
@@ -168,9 +195,9 @@ void init() {
     createKernel();
 };
 
-int main(void) {
+int main(int argc, char** argv) {
     struct timeval start, end;
-    init();
+    init(argc, argv);
 
     gettimeofday(&start, NULL);
     MatrixMulOpenCL(M, N, P_opencl, width);
