@@ -25,6 +25,10 @@ static double timer(void) {
     return tm.tv_sec + tm.tv_sec / 1000000.0;
 }
 
+float getmsec (struct timeval start, struct timeval end) {
+  return (float) (1000.0 * (end.tv_sec - start.tv_sec) 
+                  + 0.001 * (end.tv_usec - start.tv_usec));
+}
 // OpenCL kernel to perform an element-wise add of two arrays
 const char *programSource =
                 "__kernel                                            \n"
@@ -32,16 +36,17 @@ const char *programSource =
                 "            __global int *B,                        \n"
                 "            __global int *C)                        \n"
                 "{                                                   \n"
-                "   int localId = get_local_id(0);                   \n"
-                "   C[localId] = A[localId] + B[localId]             \n"
+                "   int globalId = get_global_id(0);                 \n"
+                "   C[globalId] = A[globalId] + B[globalId];         \n"
                 "}                                                   \n";
+size_t programSourceSize;
 
 // Use this to check the output of each API call
 cl_int status = 0;
 cl_uint numPlatforms = 0;
-cl_platform_id *platforms = NULL;
+cl_platform_id platforms = NULL;
 cl_uint numDevices = 0;
-cl_device_id *devices = NULL;
+cl_device_id devices = NULL;
 cl_context context = NULL;
 cl_command_queue cmdQueue = NULL;
 cl_program program = NULL;
@@ -56,34 +61,41 @@ void initOpenCL() {
     err = clGetPlatformIDs(1, &platforms, &numPlatforms);
     fprintf(stdout, "platform selected\n");
 
-    err = clGetDeviceIDs(*platforms, CL_DEVICE_TYPE_GPU, 1, &devices, &numDevices);
+    err = clGetDeviceIDs(platforms, CL_DEVICE_TYPE_GPU, 1, &devices, 
+                          &numDevices);
     fprintf(stdout, "device selected\n");
 
     context = clCreateContext(NULL, 1, &devices, NULL, NULL, &err);
     fprintf(stdout, "context created\n");
 
-    cmdQueue = clCreateCommandQueue(context, *devices, 0, &err);
+    cmdQueue = clCreateCommandQueue(context, devices, 0, &err);
     fprintf(stdout, "commandQueue created\n");
 }
 
-void createMemBuffers(int datasize, int *A, int *B) {
+void createMemBuffers(size_t datasize, int *A, int *B) {
 
-    A_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, &err);
-    B_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, &err);
-    C_mem = clCreateBuffer(context, CL_MEM_WRITE_ONLY, datasize, NULL, &err);
+    A_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, 
+                            &err);
+    B_mem = clCreateBuffer(context, CL_MEM_READ_ONLY, datasize, NULL, 
+                            &err);
+    C_mem = clCreateBuffer(context, CL_MEM_WRITE_ONLY, datasize, NULL, 
+                            &err);
     fprintf(stdout, "memory buffers created\n");
 
-    err = clEnqueueWriteBuffer(cmdQueue, A_mem, CL_TRUE, 0, datasize, A, 0, NULL, NULL);
-    err = clEnqueueWriteBuffer(cmdQueue, B_mem, CL_TRUE, 0, datasize, B, 0, NULL, NULL);
+    err = clEnqueueWriteBuffer(cmdQueue, A_mem, CL_TRUE, 0, datasize, A, 
+                                0, NULL, NULL);
+    err = clEnqueueWriteBuffer(cmdQueue, B_mem, CL_TRUE, 0, datasize, B,
+                                0, NULL, NULL);
     fprintf(stdout, "queue created\n");
 }
 
-void executeCode(int datasize, int *C) {
+void executeCode(size_t datasize, int *C) {
 
-    program = clCreateProgramWithSource(context, 1, programSource, strlen(programSource), &err);
+    program = clCreateProgramWithSource(context, 1, &programSource,  
+                                          &programSourceSize, &err);
     fprintf(stdout, "program created\n");
 
-    err = clBuildProgram(program, 1, &devices[0], NULL, NULL, NULL);
+    err = clBuildProgram(program, 1, &devices, NULL, NULL, NULL);
     fprintf(stdout, "program built successfully\n");
 
     kernel = clCreateKernel(program, "vecadd", &err);
@@ -94,7 +106,8 @@ void executeCode(int datasize, int *C) {
     err = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *) &C_mem);
     fprintf(stdout, "set kernel arguments\n");
 
-    err = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, 0, datasize, C, 0, NULL, NULL);
+    err = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, NULL, &datasize, 
+                                  NULL, 0, NULL, NULL);
     fprintf(stdout, "enqueued kernel\n");
 }
 
@@ -112,7 +125,7 @@ void cleanup(int *A, int *B, int *C) {
 
 int main(int argc, char **argv) {
     // This code executes on the OpenCL host
-
+    programSourceSize = strlen(programSource) * sizeof(char);
     // Elements in each array
     int elements;
     size_t datasize;
@@ -149,7 +162,9 @@ int main(int argc, char **argv) {
     initOpenCL();
     createMemBuffers(datasize, A, B);
     executeCode(datasize, C);
-
+    clEnqueueReadBuffer(cmdQueue, C_mem, CL_TRUE, 0, datasize, C, 0,
+                        NULL, NULL);
+    
     gettimeofday(&end, NULL);
     printf("time elapsed OpenCL: %fmsecs\n",
            (float) (1000.0 * (end.tv_sec - start.tv_sec)
@@ -174,24 +189,23 @@ int main(int argc, char **argv) {
         if (C[i] != A[i] + B[i]) {
             result = false;
             printf("Output is incorrect on:\n");
-            printf("A[i]: %d B[i]:%d C[i]:%d\n", A[i], B[i], C[i]);
+            printf("A[%d]: %d B[%d]:%d C[%d]:%d\n", i, A[i], i, B[i], i, C[i]);
             break;
         }
     }
-
-    double speedup = (end.seconds - start.second) / (end_seq.seconds - start_seq.seconds);
+    
+    float speedup = getmsec(start, end) / getmsec(start_seq, end_seq);
 
     if (result) {
         printf("Output is correct\n");
-        printf("%d\n", C[529]);
     }
 
     // output the username, time and requested values from the Nestor questions
-    printf("%lf", speedup);
+    printf("%f", speedup);
     system("date");
     system("echo $USER");
 
-    cleanup();
+    cleanup(A, B, C);
 
     return 0;
 }

@@ -36,7 +36,7 @@ int width;
 // Fill f width size many random float values
 void fill(float *f, int size) {
     for (int i = 0; i < size; i += 1) {
-        f[i] = ((float) random()) / RAND_MAX;
+        f[i] = ((float) random());
     }
 }
 
